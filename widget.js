@@ -7,7 +7,8 @@ const clientInfo = {
   companyName: "Acme Corp",
   products: ["Widget A", "Widget B", "Widget C"],
   contact: "contact@acme.com",
-  primaryColor: "#007bff" // accent color for border and button
+  logoURL: "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg", // replace with real logo
+  primaryColor: "#007bff" // brand color
 };
 
 const apiEndpoint = "https://chatbot-backend-tawny-alpha.vercel.app/api/chat";
@@ -43,41 +44,52 @@ chatIcon.title = "Chat with us";
 chatIcon.innerHTML = `<svg style="width:28px;height:28px;fill:#fff;" viewBox="0 0 24 24"><path d="M12,3C7.03,3,3,6.58,3,11C3,13.5,4.5,15.71,7,16.96V21L11.04,18.97C11.69,19.08,12.34,19.13,13,19.13C17.97,19.13,22,15.55,22,11.13C22,6.71,17.97,3,13,3H12Z" /></svg>`;
 document.body.appendChild(chatIcon);
 
-// ===== CHAT WINDOW (HIDDEN) =====
+// ===== CHAT WINDOW =====
 const chatContainer = document.createElement("div");
 chatContainer.style.position = "fixed";
 chatContainer.style.bottom = "90px";
 chatContainer.style.right = "20px";
 chatContainer.style.width = "320px";
-chatContainer.style.height = "420px";
+chatContainer.style.height = "440px";
 chatContainer.style.backgroundColor = "#fff";
 chatContainer.style.borderRadius = "15px";
 chatContainer.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
-chatContainer.style.display = "none"; // hidden initially
+chatContainer.style.display = "none";
 chatContainer.style.flexDirection = "column";
 chatContainer.style.overflow = "hidden";
 chatContainer.style.fontFamily = "Arial, sans-serif";
 chatContainer.style.zIndex = "9999";
 document.body.appendChild(chatContainer);
 
-// ===== HEADER WITH COMPANY NAME (CENTERED VERTICALLY) =====
+// ===== HEADER WITH BORDER, LOGO, AND CENTERED COMPANY NAME =====
 const header = document.createElement("div");
+header.style.position = "relative";
+header.style.height = "60px";
+header.style.backgroundColor = clientInfo.primaryColor;
 header.style.display = "flex";
-header.style.alignItems = "center";   // vertical centering
-header.style.height = "50px";
-header.style.borderBottom = `3px solid ${clientInfo.primaryColor}`;
-header.style.padding = "0 10px";
-header.style.justifyContent = "flex-start";
+header.style.alignItems = "center";
+header.style.justifyContent = "center"; // centers the company name
+header.style.borderTopLeftRadius = "15px";
+header.style.borderTopRightRadius = "15px";
 chatContainer.appendChild(header);
 
+// Logo top-left
+const logo = document.createElement("img");
+logo.src = clientInfo.logoURL;
+logo.style.height = "40px";
+logo.style.width = "auto";
+logo.style.position = "absolute";
+logo.style.left = "10px";
+logo.style.top = "10px"; // slightly overlaps border
+logo.style.borderRadius = "5px";
+header.appendChild(logo);
+
+// Company name centered
 const title = document.createElement("span");
 title.innerText = clientInfo.companyName;
-title.style.margin = "0";           // remove extra margin
-title.style.display = "flex";
-title.style.alignItems = "center";  // vertically align text
+title.style.color = "#fff";
 title.style.fontWeight = "bold";
 title.style.fontSize = "16px";
-title.style.color = "#333";
 header.appendChild(title);
 
 // ===== OUTPUT AREA =====
@@ -99,7 +111,7 @@ input.style.flex = "1";
 input.style.border = "none";
 input.style.padding = "10px";
 input.style.outline = "none";
-input.style.fontWeight = "bold"; // bold input font
+input.style.fontWeight = "bold";
 input.style.fontFamily = "Arial, sans-serif";
 input.placeholder = "Type your question...";
 inputWrapper.appendChild(input);
