@@ -1,6 +1,5 @@
-
- // ==========================
-// PROFESSIONAL DYNAMIC CHAT WIDGET WITH ANIMATION & SOUND
+// ==========================
+// PROFESSIONAL DYNAMIC CHAT WIDGET WITH ANIMATION, SOUND & ANIMATED TYPING
 // ==========================
 
 // ===== DEFAULT CLIENT CONFIG =====
@@ -142,23 +141,50 @@ inputWrapper.appendChild(button);
 
 // ===== TOGGLE CHAT WINDOW WITH FIXED ANIMATION =====
 let open = false;
+chatContainer.style.display = "none"; // ensure hidden initially
 
 chatIcon.onclick = () => {
   open = !open;
   if (open) {
-    chatContainer.style.display = "flex"; // show container
+    chatContainer.style.display = "flex";
     setTimeout(() => {
       chatContainer.style.opacity = "1";
       chatContainer.style.transform = "translateY(0)";
-    }, 10); // allow transition to apply
+    }, 10);
   } else {
     chatContainer.style.opacity = "0";
     chatContainer.style.transform = "translateY(100px)";
     setTimeout(() => {
-      chatContainer.style.display = "none"; // hide after animation
-    }, 300); // match transition duration
+      chatContainer.style.display = "none";
+    }, 300);
   }
 };
+
+// ===== TYPING INDICATOR =====
+const typingIndicator = document.createElement("p");
+typingIndicator.style.margin = "5px 0";
+typingIndicator.style.fontStyle = "italic";
+typingIndicator.style.color = "#888";
+typingIndicator.style.display = "none";
+output.appendChild(typingIndicator);
+
+let typingDotsInterval;
+
+function startTypingIndicator() {
+  typingIndicator.style.display = "block";
+  let dots = 0;
+  typingIndicator.innerText = clientInfo.companyName + " Bot is typing";
+  typingDotsInterval = setInterval(() => {
+    dots = (dots + 1) % 4;
+    typingIndicator.innerText = clientInfo.companyName + " Bot is typing" + ".".repeat(dots);
+    output.scrollTop = output.scrollHeight;
+  }, 500);
+}
+
+function stopTypingIndicator() {
+  typingIndicator.style.display = "none";
+  clearInterval(typingDotsInterval);
+}
 
 // ===== HANDLE MESSAGES =====
 async function handleMessage() {
@@ -172,8 +198,14 @@ async function handleMessage() {
   output.appendChild(userMessage);
   sendSound.play();
 
+  // Show animated typing
+  startTypingIndicator();
+
   // AI reply
   const reply = await sendMessageToAI(input.value);
+
+  stopTypingIndicator();
+
   const botMessage = document.createElement("p");
   botMessage.innerText = clientInfo.companyName + " Bot: " + reply;
   botMessage.style.margin = "5px 0";
