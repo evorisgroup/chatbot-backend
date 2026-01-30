@@ -117,31 +117,36 @@ inputWrapper.style.display = "flex";
 inputWrapper.style.borderTop = `1px solid ${clientInfo.primaryColor}`;
 chatContainer.appendChild(inputWrapper);
 
+// Auto-resizing textarea input
 const input = document.createElement("textarea");
 input.style.flex = "1";
 input.style.border = "none";
-input.style.padding = "10px";
+input.style.padding = "8px 10px";
 input.style.outline = "none";
 input.style.fontWeight = "bold";
 input.style.fontFamily = "Arial, sans-serif";
-input.style.resize = "none"; // we'll auto-resize
-input.style.height = "40px";
+input.style.resize = "none"; // handled manually
+input.style.height = "30px"; // default one line
+input.style.lineHeight = "1.2em";
 input.placeholder = "Type your question...";
 inputWrapper.appendChild(input);
 
+// Send button adjusted size
 const button = document.createElement("button");
 button.innerText = "Send";
-button.style.padding = "10px";
+button.style.padding = "8px 12px";
 button.style.border = "none";
 button.style.backgroundColor = clientInfo.primaryColor;
 button.style.color = "#fff";
 button.style.cursor = "pointer";
+button.style.height = "30px"; // match input default
 inputWrapper.appendChild(button);
 
 // ===== AUTO-RESIZE TEXTAREA =====
 input.addEventListener("input", () => {
   input.style.height = "auto";
   input.style.height = input.scrollHeight + "px";
+  button.style.height = input.style.height; // keep button aligned
 });
 
 // ===== TOGGLE CHAT WINDOW =====
@@ -204,7 +209,8 @@ async function handleMessage() {
 
   // Clear and reset input
   input.value = "";
-  input.style.height = "40px";
+  input.style.height = "30px";
+  button.style.height = "30px";
 
   // Show animated typing
   startTypingIndicator();
@@ -227,7 +233,7 @@ async function handleMessage() {
 button.onclick = handleMessage;
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault(); // prevent new line on Enter
+    e.preventDefault(); // prevent newline
     handleMessage();
   }
 });
