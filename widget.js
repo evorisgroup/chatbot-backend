@@ -1,14 +1,13 @@
 // ==========================
-// PROFESSIONAL DYNAMIC CHAT WIDGET WITH ANIMATION, TYPING, SMOOTH SCROLL & AUTO-RESIZE INPUT
+// PROFESSIONAL DYNAMIC CHAT WIDGET (CLIENT INFO VIA SINGLE TEXT BLOCK)
 // ==========================
 
 // ===== DEFAULT CLIENT CONFIG =====
 let clientInfo = {
   companyName: "Default Company",
-  products: [],
-  contact: "",
   logoURL: "",
-  primaryColor: "#007bff"
+  primaryColor: "#007bff",
+  companyInfoText: "This is default company info. Replace with your company details."
 };
 
 // ===== MERGE CLIENT CONFIG IF PROVIDED =====
@@ -18,7 +17,7 @@ if (window.CLIENT_CHAT_CONFIG) {
 
 // ===== SEND MESSAGE FUNCTION =====
 async function sendMessageToAI(message) {
-  const messageWithContext = `${message}\nUse this company info: ${JSON.stringify(clientInfo)}`;
+  const messageWithContext = `${message}\nUse this company info to answer questions accurately:\n${clientInfo.companyInfoText}`;
   const response = await fetch("https://chatbot-backend-tawny-alpha.vercel.app/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -237,4 +236,5 @@ input.addEventListener("keydown", (e) => {
     handleMessage();
   }
 });
+
 
