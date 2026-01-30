@@ -1,22 +1,25 @@
 // ==========================
-// PROFESSIONAL FLOATING CHAT WIDGET
+// PROFESSIONAL DYNAMIC CHAT WIDGET
 // ==========================
 
-// ===== CLIENT CONFIGURATION =====
-const clientInfo = {
-  companyName: "Acme Corp",
-  products: ["Widget A", "Widget B", "Widget C"],
-  contact: "contact@acme.com",
-  logoURL: "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg", // replace with real logo
-  primaryColor: "#007bff" // brand color
+// ===== DEFAULT CLIENT CONFIG =====
+let clientInfo = {
+  companyName: "Default Company",
+  products: [],
+  contact: "",
+  logoURL: "",
+  primaryColor: "#007bff"
 };
 
-const apiEndpoint = "https://chatbot-backend-tawny-alpha.vercel.app/api/chat";
+// ===== MERGE CLIENT CONFIG IF PROVIDED =====
+if (window.CLIENT_CHAT_CONFIG) {
+  clientInfo = { ...clientInfo, ...window.CLIENT_CHAT_CONFIG };
+}
 
 // ===== SEND MESSAGE FUNCTION =====
 async function sendMessageToAI(message) {
   const messageWithContext = `${message}\nUse this company info: ${JSON.stringify(clientInfo)}`;
-  const response = await fetch(apiEndpoint, {
+  const response = await fetch("https://chatbot-backend-tawny-alpha.vercel.app/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message: messageWithContext })
@@ -68,19 +71,19 @@ header.style.height = "60px";
 header.style.backgroundColor = clientInfo.primaryColor;
 header.style.display = "flex";
 header.style.alignItems = "center";
-header.style.justifyContent = "center"; // centers the company name
+header.style.justifyContent = "center"; // centers company name
 header.style.borderTopLeftRadius = "15px";
 header.style.borderTopRightRadius = "15px";
 chatContainer.appendChild(header);
 
 // Logo top-left
 const logo = document.createElement("img");
-logo.src = clientInfo.logoURL;
+logo.src = clientInfo.logoURL || "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg";
 logo.style.height = "40px";
 logo.style.width = "auto";
 logo.style.position = "absolute";
 logo.style.left = "10px";
-logo.style.top = "10px"; // slightly overlaps border
+logo.style.top = "10px";
 logo.style.borderRadius = "5px";
 header.appendChild(logo);
 
@@ -90,6 +93,7 @@ title.innerText = clientInfo.companyName;
 title.style.color = "#fff";
 title.style.fontWeight = "bold";
 title.style.fontSize = "16px";
+title.style.textAlign = "center";
 header.appendChild(title);
 
 // ===== OUTPUT AREA =====
