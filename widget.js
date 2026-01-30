@@ -64,10 +64,12 @@ document.body.appendChild(chatContainer);
 // ===== TOP HEADER WITH LOGO & BORDER =====
 const header = document.createElement("div");
 header.style.display = "flex";
-header.style.alignItems = "center";
+header.style.alignItems = "center";   // vertical center everything
 header.style.height = "50px";
 header.style.borderBottom = `3px solid ${clientInfo.primaryColor}`;
 header.style.padding = "0 10px";
+header.style.gap = "10px";            // space between logo and text
+header.style.justifyContent = "flex-start"; // left-align content
 chatContainer.appendChild(header);
 
 const logo = document.createElement("img");
@@ -79,6 +81,9 @@ header.appendChild(logo);
 
 const title = document.createElement("span");
 title.innerText = clientInfo.companyName;
+title.style.margin = "0";            // remove extra margin
+title.style.display = "flex";
+title.style.alignItems = "center";   // vertically align with header
 title.style.fontWeight = "bold";
 title.style.fontSize = "16px";
 title.style.color = "#333";
