@@ -1,5 +1,5 @@
 // ==========================
-// PROFESSIONAL DYNAMIC CHAT WIDGET WITH ANIMATION, SOUND & ANIMATED TYPING
+// PROFESSIONAL DYNAMIC CHAT WIDGET WITH ANIMATION, TYPING, SMOOTH SCROLL & AUTO-RESIZE INPUT
 // ==========================
 
 // ===== DEFAULT CLIENT CONFIG =====
@@ -15,10 +15,6 @@ let clientInfo = {
 if (window.CLIENT_CHAT_CONFIG) {
   clientInfo = { ...clientInfo, ...window.CLIENT_CHAT_CONFIG };
 }
-
-// ===== SOUND EFFECTS (SHORT & QUIET) =====
-const sendSound = new Audio("https://freesound.org/data/previews/402/402264_5121236-lq.mp3"); // subtle send
-const receiveSound = new Audio("https://freesound.org/data/previews/402/402265_5121236-lq.mp3"); // subtle receive
 
 // ===== SEND MESSAGE FUNCTION =====
 async function sendMessageToAI(message) {
@@ -81,7 +77,7 @@ header.style.height = "60px";
 header.style.backgroundColor = clientInfo.primaryColor;
 header.style.display = "flex";
 header.style.alignItems = "center";
-header.style.justifyContent = "center"; // center company name
+header.style.justifyContent = "center";
 header.style.borderTopLeftRadius = "15px";
 header.style.borderTopRightRadius = "15px";
 chatContainer.appendChild(header);
@@ -112,6 +108,7 @@ output.style.flex = "1";
 output.style.padding = "10px";
 output.style.overflowY = "auto";
 output.style.fontSize = "14px";
+output.style.scrollBehavior = "smooth"; // smooth scrolling
 chatContainer.appendChild(output);
 
 // ===== INPUT AREA =====
@@ -120,13 +117,15 @@ inputWrapper.style.display = "flex";
 inputWrapper.style.borderTop = `1px solid ${clientInfo.primaryColor}`;
 chatContainer.appendChild(inputWrapper);
 
-const input = document.createElement("input");
+const input = document.createElement("textarea");
 input.style.flex = "1";
 input.style.border = "none";
 input.style.padding = "10px";
 input.style.outline = "none";
 input.style.fontWeight = "bold";
 input.style.fontFamily = "Arial, sans-serif";
+input.style.resize = "none"; // we'll auto-resize
+input.style.height = "40px";
 input.placeholder = "Type your question...";
 inputWrapper.appendChild(input);
 
@@ -139,9 +138,15 @@ button.style.color = "#fff";
 button.style.cursor = "pointer";
 inputWrapper.appendChild(button);
 
-// ===== TOGGLE CHAT WINDOW WITH FIXED ANIMATION =====
+// ===== AUTO-RESIZE TEXTAREA =====
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = input.scrollHeight + "px";
+});
+
+// ===== TOGGLE CHAT WINDOW =====
 let open = false;
-chatContainer.style.display = "none"; // ensure hidden initially
+chatContainer.style.display = "none"; // hidden initially
 
 chatIcon.onclick = () => {
   open = !open;
@@ -188,7 +193,7 @@ function stopTypingIndicator() {
 
 // ===== HANDLE MESSAGES =====
 async function handleMessage() {
-  if (!input.value) return;
+  if (!input.value.trim()) return;
 
   // User message
   const userMessage = document.createElement("p");
@@ -196,16 +201,17 @@ async function handleMessage() {
   userMessage.style.margin = "5px 0";
   userMessage.style.fontWeight = "bold";
   output.appendChild(userMessage);
-  sendSound.play();
+
+  // Clear and reset input
+  input.value = "";
+  input.style.height = "40px";
 
   // Show animated typing
   startTypingIndicator();
 
   // AI reply
-  const reply = await sendMessageToAI(input.value);
-
+  const reply = await sendMessageToAI(userMessage.innerText.replace(/^You: /, ""));
   stopTypingIndicator();
-  receiveSound.play();
 
   const botMessage = document.createElement("p");
   botMessage.innerText = clientInfo.companyName + " Bot: " + reply;
@@ -213,11 +219,16 @@ async function handleMessage() {
   botMessage.style.color = "#555";
   output.appendChild(botMessage);
 
-  output.scrollTop = output.scrollHeight;
-  input.value = "";
+  // Smooth scroll
+  output.scrollTo({ top: output.scrollHeight, behavior: "smooth" });
 }
 
+// ===== EVENTS =====
 button.onclick = handleMessage;
 input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") handleMessage();
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault(); // prevent new line on Enter
+    handleMessage();
+  }
 });
+
