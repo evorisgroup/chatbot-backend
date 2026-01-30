@@ -1,4 +1,5 @@
-// ==========================
+
+ // ==========================
 // PROFESSIONAL DYNAMIC CHAT WIDGET WITH ANIMATION & SOUND
 // ==========================
 
@@ -64,7 +65,7 @@ chatContainer.style.height = "440px";
 chatContainer.style.backgroundColor = "#fff";
 chatContainer.style.borderRadius = "15px";
 chatContainer.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
-chatContainer.style.display = "flex";
+chatContainer.style.display = "none"; // hidden initially
 chatContainer.style.flexDirection = "column";
 chatContainer.style.overflow = "hidden";
 chatContainer.style.fontFamily = "Arial, sans-serif";
@@ -139,23 +140,30 @@ button.style.color = "#fff";
 button.style.cursor = "pointer";
 inputWrapper.appendChild(button);
 
-// ===== TOGGLE CHAT WINDOW WITH ANIMATION =====
+// ===== TOGGLE CHAT WINDOW WITH FIXED ANIMATION =====
 let open = false;
+
 chatIcon.onclick = () => {
   open = !open;
   if (open) {
-    chatContainer.style.opacity = "1";
-    chatContainer.style.transform = "translateY(0)";
+    chatContainer.style.display = "flex"; // show container
+    setTimeout(() => {
+      chatContainer.style.opacity = "1";
+      chatContainer.style.transform = "translateY(0)";
+    }, 10); // allow transition to apply
   } else {
     chatContainer.style.opacity = "0";
     chatContainer.style.transform = "translateY(100px)";
+    setTimeout(() => {
+      chatContainer.style.display = "none"; // hide after animation
+    }, 300); // match transition duration
   }
 };
 
 // ===== HANDLE MESSAGES =====
 async function handleMessage() {
   if (!input.value) return;
-  
+
   // User message
   const userMessage = document.createElement("p");
   userMessage.innerText = "You: " + input.value;
@@ -181,4 +189,3 @@ button.onclick = handleMessage;
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter") handleMessage();
 });
-
