@@ -7,8 +7,7 @@ const clientInfo = {
   companyName: "Acme Corp",
   products: ["Widget A", "Widget B", "Widget C"],
   contact: "contact@acme.com",
-  logoURL: "https://example.com/logo.png", // small image for top-left
-  primaryColor: "#007bff" // accent color for border, button
+  primaryColor: "#007bff" // accent color for border and button
 };
 
 const apiEndpoint = "https://chatbot-backend-tawny-alpha.vercel.app/api/chat";
@@ -25,7 +24,7 @@ async function sendMessageToAI(message) {
   return data.reply;
 }
 
-// ===== CREATE FLOATING MESSENGER ICON =====
+// ===== FLOATING MESSENGER ICON =====
 const chatIcon = document.createElement("div");
 chatIcon.style.position = "fixed";
 chatIcon.style.bottom = "20px";
@@ -44,7 +43,7 @@ chatIcon.title = "Chat with us";
 chatIcon.innerHTML = `<svg style="width:28px;height:28px;fill:#fff;" viewBox="0 0 24 24"><path d="M12,3C7.03,3,3,6.58,3,11C3,13.5,4.5,15.71,7,16.96V21L11.04,18.97C11.69,19.08,12.34,19.13,13,19.13C17.97,19.13,22,15.55,22,11.13C22,6.71,17.97,3,13,3H12Z" /></svg>`;
 document.body.appendChild(chatIcon);
 
-// ===== CREATE CHAT WINDOW (HIDDEN) =====
+// ===== CHAT WINDOW (HIDDEN) =====
 const chatContainer = document.createElement("div");
 chatContainer.style.position = "fixed";
 chatContainer.style.bottom = "90px";
@@ -61,29 +60,21 @@ chatContainer.style.fontFamily = "Arial, sans-serif";
 chatContainer.style.zIndex = "9999";
 document.body.appendChild(chatContainer);
 
-// ===== TOP HEADER WITH LOGO & BORDER =====
+// ===== HEADER WITH COMPANY NAME (CENTERED VERTICALLY) =====
 const header = document.createElement("div");
 header.style.display = "flex";
-header.style.alignItems = "center";   // vertical center everything
+header.style.alignItems = "center";   // vertical centering
 header.style.height = "50px";
 header.style.borderBottom = `3px solid ${clientInfo.primaryColor}`;
 header.style.padding = "0 10px";
-header.style.gap = "10px";            // space between logo and text
-header.style.justifyContent = "flex-start"; // left-align content
+header.style.justifyContent = "flex-start";
 chatContainer.appendChild(header);
-
-const logo = document.createElement("img");
-logo.src = clientInfo.logoURL;
-logo.style.height = "40px";
-logo.style.width = "auto";
-logo.style.marginRight = "10px";
-header.appendChild(logo);
 
 const title = document.createElement("span");
 title.innerText = clientInfo.companyName;
-title.style.margin = "0";            // remove extra margin
+title.style.margin = "0";           // remove extra margin
 title.style.display = "flex";
-title.style.alignItems = "center";   // vertically align with header
+title.style.alignItems = "center";  // vertically align text
 title.style.fontWeight = "bold";
 title.style.fontSize = "16px";
 title.style.color = "#333";
@@ -117,7 +108,7 @@ const button = document.createElement("button");
 button.innerText = "Send";
 button.style.padding = "10px";
 button.style.border = "none";
-button.style.backgroundColor = clientInfo.primaryColor; // brand color
+button.style.backgroundColor = clientInfo.primaryColor;
 button.style.color = "#fff";
 button.style.cursor = "pointer";
 inputWrapper.appendChild(button);
@@ -127,7 +118,7 @@ chatIcon.onclick = () => {
   chatContainer.style.display = chatContainer.style.display === "none" ? "flex" : "none";
 };
 
-// ===== HANDLE SENDING MESSAGES =====
+// ===== HANDLE MESSAGES =====
 async function handleMessage() {
   if (!input.value) return;
   const userMessage = document.createElement("p");
