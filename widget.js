@@ -16,9 +16,9 @@ if (window.CLIENT_CHAT_CONFIG) {
   clientInfo = { ...clientInfo, ...window.CLIENT_CHAT_CONFIG };
 }
 
-// ===== SOUND EFFECTS =====
-const sendSound = new Audio("https://freesound.org/data/previews/109/109662_945474-lq.mp3"); // message sent
-const receiveSound = new Audio("https://freesound.org/data/previews/170/170147_2437358-lq.mp3"); // message received
+// ===== SOUND EFFECTS (SHORT & QUIET) =====
+const sendSound = new Audio("https://freesound.org/data/previews/402/402264_5121236-lq.mp3"); // subtle send
+const receiveSound = new Audio("https://freesound.org/data/previews/402/402265_5121236-lq.mp3"); // subtle receive
 
 // ===== SEND MESSAGE FUNCTION =====
 async function sendMessageToAI(message) {
@@ -205,13 +205,13 @@ async function handleMessage() {
   const reply = await sendMessageToAI(input.value);
 
   stopTypingIndicator();
+  receiveSound.play();
 
   const botMessage = document.createElement("p");
   botMessage.innerText = clientInfo.companyName + " Bot: " + reply;
   botMessage.style.margin = "5px 0";
   botMessage.style.color = "#555";
   output.appendChild(botMessage);
-  receiveSound.play();
 
   output.scrollTop = output.scrollHeight;
   input.value = "";
