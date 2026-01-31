@@ -5,13 +5,24 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const GREETING_ONLY_REGEX = /^(hi|hello|hey|hey there|good morning|good afternoon|good evening)[!. ]*$/i;
-const CALL_INTENT_REGEX = /(call|phone|appointment|book|schedule|pricing|price|cost|order|quote)/i;
+/* ===============================
+   CONSTANTS
+   =============================== */
+
+const DAY_NAMES = [
+  "Sunday","Monday","Tuesday","Wednesday",
+  "Thursday","Friday","Saturday"
+];
+
+const GREETING_ONLY_REGEX =
+  /^(hi|hello|hey|hey there|good morning|good afternoon|good evening)[!. ]*$/i;
+
+const CALL_INTENT_REGEX =
+  /(call|phone|appointment|book|schedule|pricing|price|cost|order|quote)/i;
 
 /* ===============================
    TIME HELPERS
    =============================== */
-const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 function minutes(hm) {
   const [h, m] = hm.split(":").map(Number);
@@ -32,11 +43,13 @@ function isOpenNow(client) {
   if (client.holiday_rules?.dates?.includes(todayISO)) return false;
 
   const now = new Date();
-  const dayKey = DAY_NAMES[now.getDay()].toLowerCase();
   const minsNow = now.getHours() * 60 + now.getMinutes();
+  const dayKey = DAY_NAMES[now.getDay()].toLowerCase();
   const ranges = client.weekly_hours[dayKey] || [];
 
-  return ranges.some(([s, e]) => minsNow >= minutes(s) && minsNow < minutes(e));
+  return ranges.some(([s, e]) =>
+    minsNow >= minutes(s) && minsNow < minutes(e)
+  );
 }
 
 function getHoursSummary(client) {
@@ -46,12 +59,43 @@ function getHoursSummary(client) {
   const ranges = client.weekly_hours[dayKey] || [];
   if (!ranges.length) return null;
 
-  return ranges.map(r => `${formatTime(r[0])} – ${formatTime(r[1])}`).join(", ");
+  return ranges
+    .map(([s, e]) => `${formatTime(s)} – ${formatTime(e)}`)
+    .join(", ");
+}
+
+function getNextOpenTime(client) {
+  if (!client.weekly_hours) return null;
+
+  const now = new Date();
+  const todayIndex = now.getDay();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  for (let offset = 0; offset < 7; offset++) {
+    const dayIndex = (todayIndex + offset) % 7;
+    const dayKey = DAY_NAMES[dayIndex].toLowerCase();
+
+    const checkDate = new Date(now);
+    checkDate.setDate(now.getDate() + offset);
+    const checkISO = checkDate.toISOString().split("T")[0];
+    if (client.holiday_rules?.dates?.includes(checkISO)) continue;
+
+    const ranges = client.weekly_hours[dayKey] || [];
+    for (const [start] of ranges) {
+      const startMin = minutes(start);
+      if (offset > 0 || startMin > currentMinutes) {
+        return `${DAY_NAMES[dayIndex]} at ${formatTime(start)}`;
+      }
+    }
+  }
+
+  return null;
 }
 
 /* ===============================
    HANDLER
    =============================== */
+
 export default async function handler(req, res) {
   try {
     const { message, client_id } = req.body;
@@ -59,12 +103,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ reply: "Invalid request." });
     }
 
-    // Rule 1: greetings are always neutral
-    if (GREETING_ONLY_REGEX.test(message.trim())) {
-  return res.json({
-    reply: "Hi! How can I help you today?"
-  });
-}
+    const trimmed = message.trim();
+
+    // Greeting-only → friendly response, no business logic
+    if (GREETING_ONLY_REGEX.test(trimmed)) {
+      return res.json({
+        reply: "Hi! How can I help you today?"
+      });
+    }
 
     const supabase = createClient(
       process.env.SUPABASE_URL,
@@ -82,29 +128,48 @@ export default async function handler(req, res) {
     }
 
     const openNow = isOpenNow(client);
-    const callRelevant = CALL_INTENT_REGEX.test(message);
+    const callRelevant = CALL_INTENT_REGEX.test(trimmed);
     const hoursToday = getHoursSummary(client);
+    const nextOpen = !openNow ? getNextOpenTime(client) : null;
 
-    // Build minimal, sales-safe context
+    /* ===============================
+       CONTEXT CONSTRUCTION
+       =============================== */
+
     let context = `
 Company: ${client.company_name}
 Description: ${client.company_info}
 
 Rules:
-- Be helpful and concise.
+- Be helpful, calm, and professional.
+- Do not discourage the user.
 - Do not mention hours or closure unless calling is relevant.
-- Only suggest calling if it adds value.
+- Do not push calling if the question is already answered.
 `;
 
-    // Only include call info if relevant
     if (callRelevant) {
-      context += `
-Calling policy:
-- Appointments and pricing are handled by phone.
-- The business is currently ${openNow ? "open" : "closed"}.
-${openNow && hoursToday ? `Today's hours: ${hoursToday}` : ""}
-Phone number: ${client.phone_number || "Not available"}
+      if (openNow) {
+        context += `
+Calling:
+- The business is currently OPEN.
+- Pricing and appointments are handled by phone.
+- Phone number: ${client.phone_number}
+${hoursToday ? `Today's hours: ${hoursToday}` : ""}
 `;
+      } else {
+        context += `
+Calling:
+- The business is currently CLOSED.
+- Do NOT suggest calling right now.
+- Clearly explain that the business is closed.
+- Tell the user when to call instead.
+- Be reassuring and non-alarming.
+
+${hoursToday ? `Regular hours today: ${hoursToday}` : ""}
+${nextOpen ? `Next opening time: ${nextOpen}` : ""}
+Phone number: ${client.phone_number}
+`;
+      }
     }
 
     const completion = await openai.chat.completions.create({
@@ -114,14 +179,14 @@ Phone number: ${client.phone_number || "Not available"}
         {
           role: "system",
           content: `
-You are a professional, friendly customer assistant.
+You are a customer-facing assistant for a local service business.
 
 Hard rules:
-- Never discourage the user.
-- Never volunteer that the business is closed unless calling is relevant.
-- Never push calling if the question was already answered.
-- Be warm, calm, and reassuring.
-- Max 3 sentences, max 60 words.
+- Never discourage customers.
+- Never mention being closed unless calling is relevant.
+- If you mention a phone number, availability MUST be mentioned.
+- Max 3 sentences.
+- Max 60 words.
 - Do not mention being an AI.
 `
         },
@@ -138,6 +203,8 @@ Hard rules:
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ reply: "Something went wrong." });
+    return res.status(500).json({
+      reply: "Something went wrong."
+    });
   }
 }
