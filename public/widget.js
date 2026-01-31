@@ -31,8 +31,9 @@
   }
 
   function isMobile() {
-    return isTouchDevice();
-  }
+  return isTouchDevice() && !supportsHover();
+}
+
 
   function getSafeHeight() {
     if (window.visualViewport && window.visualViewport.height) {
