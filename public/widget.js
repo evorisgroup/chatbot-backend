@@ -1,3 +1,18 @@
+/* ===============================
+   ENSURE MOBILE VIEWPORT (WIDGET-ONLY)
+   =============================== */
+(function ensureViewport() {
+  try {
+    const existing = document.querySelector('meta[name="viewport"]');
+    if (!existing) {
+      const meta = document.createElement("meta");
+      meta.name = "viewport";
+      meta.content = "width=device-width, initial-scale=1";
+      document.head.appendChild(meta);
+    }
+  } catch (_) {}
+})();
+
 (() => {
   const CLIENT_ID = window.CLIENT_ID;
   if (!CLIENT_ID) return;
@@ -6,23 +21,21 @@
   let chatOpen = false;
   let typingInterval = null;
 
-  /* =======================
-     DEVICE DETECTION (SAFE)
-     ======================= */
+  /* ===============================
+     DEVICE MODE (TRUST VIEWPORT NOW)
+     =============================== */
   function isMobile() {
     return window.innerWidth <= 768;
   }
 
-  function onResize() {
+  window.addEventListener("resize", () => {
     sizeBubble();
     sizeChat();
-  }
+  });
 
-  window.addEventListener("resize", onResize);
-
-  /* =======================
+  /* ===============================
      FETCH CLIENT DATA
-     ======================= */
+     =============================== */
   async function loadClientData() {
     const res = await fetch(
       `https://chatbot-backend-tawny-alpha.vercel.app/api/clientdata?client_id=${CLIENT_ID}`
@@ -31,9 +44,9 @@
     applyBranding();
   }
 
-  /* =======================
+  /* ===============================
      CHAT BUBBLE
-     ======================= */
+     =============================== */
   const bubble = document.createElement("div");
   bubble.innerHTML = "💬";
   bubble.style.position = "fixed";
@@ -66,9 +79,9 @@
   sizeBubble();
   document.body.appendChild(bubble);
 
-  /* =======================
-     CHAT WINDOW (FULL LAYOUT)
-     ======================= */
+  /* ===============================
+     CHAT WINDOW
+     =============================== */
   const chat = document.createElement("div");
   chat.style.position = "fixed";
   chat.style.background = "#fff";
@@ -83,26 +96,26 @@
 
   function sizeChat() {
     if (isMobile()) {
-      chat.style.width = "100vw";
-      chat.style.height = "100vh";
-      chat.style.bottom = "0";
-      chat.style.right = "0";
-      chat.style.borderRadius = "0";
+      chat.style.width = "calc(100vw - 16px)";
+      chat.style.height = "calc(100vh - 16px)";
+      chat.style.bottom = "8px";
+      chat.style.right = "8px";
+      chat.style.borderRadius = "16px";
     } else {
       chat.style.width = "360px";
       chat.style.height = "500px";
       chat.style.bottom = "110px";
       chat.style.right = "20px";
-      chat.style.borderRadius = "14px";
+      chat.style.borderRadius = "16px";
     }
   }
 
   sizeChat();
   document.body.appendChild(chat);
 
-  /* =======================
+  /* ===============================
      HEADER
-     ======================= */
+     =============================== */
   const header = document.createElement("div");
   header.style.display = "flex";
   header.style.alignItems = "center";
@@ -139,9 +152,9 @@
   header.appendChild(close);
   chat.appendChild(header);
 
-  /* =======================
+  /* ===============================
      MESSAGES
-     ======================= */
+     =============================== */
   const messages = document.createElement("div");
   messages.style.flex = "1";
   messages.style.padding = "16px";
@@ -169,9 +182,9 @@
     typing.style.display = "none";
   }
 
-  /* =======================
+  /* ===============================
      INPUT
-     ======================= */
+     =============================== */
   const inputWrap = document.createElement("div");
   inputWrap.style.padding = "16px";
   inputWrap.style.borderTop = "1px solid #ddd";
@@ -201,9 +214,9 @@
   inputWrap.appendChild(send);
   chat.appendChild(inputWrap);
 
-  /* =======================
+  /* ===============================
      BRANDING
-     ======================= */
+     =============================== */
   function applyBranding() {
     if (!clientData) return;
     bubble.style.background = clientData.primary_color;
@@ -216,9 +229,9 @@
     }
   }
 
-  /* =======================
-     MESSAGES
-     ======================= */
+  /* ===============================
+     CHAT LOGIC
+     =============================== */
   function addMessage(text, user) {
     const msg = document.createElement("div");
     msg.style.margin = "10px 0";
@@ -257,9 +270,9 @@
 
   send.onclick = sendMessage;
 
-  /* =======================
+  /* ===============================
      OPEN / CLOSE
-     ======================= */
+     =============================== */
   function openChat() {
     chat.style.opacity = "1";
     chat.style.pointerEvents = "auto";
