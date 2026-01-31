@@ -30,17 +30,32 @@
   }
 
   function isBusinessOpen() {
-    if (!clientData?.business_hours) return true;
+  if (!clientData?.weekly_hours) return true;
 
-    if (clientData.business_hours === "weekday_9_5") {
-      const now = new Date();
-      const day = now.getDay(); // 0 = Sun
-      const hour = now.getHours();
-      return day >= 1 && day <= 5 && hour >= 9 && hour < 17;
-    }
+  const today = new Date().toISOString().split("T")[0];
+  const dayName = [
+    "sunday","monday","tuesday","wednesday",
+    "thursday","friday","saturday"
+  ][new Date().getDay()];
 
-    return true;
+  // Holiday check
+  if (
+    clientData.holiday_rules?.dates &&
+    clientData.holiday_rules.dates.includes(today)
+  ) {
+    return false;
   }
+
+  const ranges = clientData.weekly_hours[dayName] || [];
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+
+  return ranges.some(([start, end]) => {
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    return mins >= sh * 60 + sm && mins < eh * 60 + em;
+  });
+}
 
   /* ===============================
      FETCH CLIENT DATA
