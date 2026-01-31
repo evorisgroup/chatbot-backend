@@ -5,7 +5,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const GREETING_REGEX = /^(hi|hello|hey|good morning|good afternoon|good evening)\b/i;
+const GREETING_ONLY_REGEX = /^(hi|hello|hey|hey there|good morning|good afternoon|good evening)[!. ]*$/i;
 const CALL_INTENT_REGEX = /(call|phone|appointment|book|schedule|pricing|price|cost|order|quote)/i;
 
 /* ===============================
@@ -60,11 +60,11 @@ export default async function handler(req, res) {
     }
 
     // Rule 1: greetings are always neutral
-    if (GREETING_REGEX.test(message.trim())) {
-      return res.json({
-        reply: "Hi! How can I help you today?"
-      });
-    }
+    if (GREETING_ONLY_REGEX.test(message.trim())) {
+  return res.json({
+    reply: "Hi! How can I help you today?"
+  });
+}
 
     const supabase = createClient(
       process.env.SUPABASE_URL,
