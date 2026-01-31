@@ -12,100 +12,83 @@ export default async function handler(req, res) {
     }
 
     const { message, client_id } = req.body;
-
     if (!message || !client_id) {
       return res.status(400).json({ reply: "Invalid request." });
     }
 
-    // ---------- Supabase ----------
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_KEY
     );
 
-    const { data: client, error } = await supabase
+    const { data: client } = await supabase
       .from("clients")
       .select("*")
       .eq("client_id", client_id)
       .single();
 
-    if (error || !client) {
+    if (!client) {
       return res.json({
-        reply: "I couldn't load company information right now.",
+        reply: "I couldn’t load company information right now.",
       });
     }
 
-    // ---------- Company Context ----------
     const companyContext = `
-Company name:
-${client.company_name}
+Company name: ${client.company_name}
 
-Company description:
+Description:
 ${client.company_info}
 
 Products:
-${client.products.map(p => `- ${p.name}: $${p.price}`).join("\n")}
+${client.products.map(p => `${p.name} ($${p.price})`).join(", ")}
 
 Locations:
 ${client.locations.join(", ")}
 
 FAQs:
-${client.faqs.map(f => `Q: ${f.q}\nA: ${f.a}`).join("\n\n")}
+${client.faqs.map(f => `Q: ${f.q} A: ${f.a}`).join(" | ")}
 `;
 
-    // ---------- AI Completion ----------
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      temperature: 0.3,
+      temperature: 0.2,
       messages: [
         {
           role: "system",
           content: `
-You are a professional customer-facing assistant for the company described below.
+You are a professional customer-facing assistant for the company below.
 
-Your job:
-- Answer questions accurately using ONLY the provided company information.
-- Sound confident, clear, and professional.
-- Keep responses concise (2–4 sentences unless more detail is requested).
+STRICT RULES:
+- Answer using ONLY the provided company information.
+- Maximum 3 sentences.
+- Maximum 60 words.
+- Be confident and concise.
 - Do NOT mention being an AI.
-- Do NOT speculate or guess.
+- Do NOT over-explain.
+- If more detail is needed, ask a short follow-up question instead.
+- If information is unavailable, say so plainly and suggest a next step.
 
-Conversation style rules:
-- Be helpful and direct.
-- When appropriate, suggest a reasonable next step (e.g. learning more, scheduling, contacting the company).
-- Do NOT be pushy or salesy.
-- If the information is not available, say so plainly and offer an alternative.
-
-Never invent:
-- Prices
-- Policies
-- Locations
-- Capabilities
+Do not invent pricing, policies, or capabilities.
           `,
         },
-        {
-          role: "system",
-          content: companyContext,
-        },
-        {
-          role: "user",
-          content: message,
-        },
+        { role: "system", content: companyContext },
+        { role: "user", content: message },
       ],
     });
 
     const reply =
       completion.choices?.[0]?.message?.content ||
-      "I'm not sure how to answer that.";
+      "I’m not sure about that. Could you clarify what you’re looking for?";
 
     return res.json({ reply });
   } catch (err) {
-    console.error("AI chat error:", err);
+    console.error("Chat error:", err);
     return res.status(500).json({
       reply: "There was an error generating a response.",
     });
   }
 }
+
 
 
 

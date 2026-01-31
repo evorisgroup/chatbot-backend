@@ -22,35 +22,9 @@
   let typingInterval = null;
   let unreadCount = 0;
 
-  /* ===============================
-     HELPERS
-     =============================== */
   function isMobile() {
     return window.innerWidth <= 768;
   }
-
-  const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-  const colors = {
-    light: {
-      bg: "#ffffff",
-      panel: "#fafafa",
-      text: "#000",
-      user: "#e0e0e0",
-      bot: "#ffffff",
-      border: "#ddd",
-    },
-    dark: {
-      bg: "#1e1e1e",
-      panel: "#2a2a2a",
-      text: "#fff",
-      user: "#3a3a3a",
-      bot: "#2a2a2a",
-      border: "#444",
-    },
-  };
-
-  const theme = isDarkMode ? colors.dark : colors.light;
 
   /* ===============================
      FETCH CLIENT DATA
@@ -85,8 +59,9 @@
     bubble.style.height = isMobile() ? "88px" : "72px";
     bubble.style.fontSize = isMobile() ? "36px" : "28px";
   }
-
   sizeBubble();
+  window.addEventListener("resize", sizeBubble);
+
   document.body.appendChild(bubble);
 
   /* ---------- Unread Badge ---------- */
@@ -103,20 +78,16 @@
   bubble.appendChild(badge);
 
   function updateBadge() {
-    if (unreadCount > 0) {
-      badge.textContent = unreadCount;
-      badge.style.display = "block";
-    } else {
-      badge.style.display = "none";
-    }
+    badge.style.display = unreadCount > 0 ? "block" : "none";
+    badge.textContent = unreadCount || "";
   }
 
   /* ===============================
-     CHAT WINDOW
+     CHAT WINDOW (STATIC)
      =============================== */
   const chat = document.createElement("div");
   chat.style.position = "fixed";
-  chat.style.background = theme.bg;
+  chat.style.background = "#fff";
   chat.style.display = "flex";
   chat.style.flexDirection = "column";
   chat.style.boxShadow = "0 12px 32px rgba(0,0,0,0.35)";
@@ -133,7 +104,7 @@
       chat.style.bottom = "12px";
       chat.style.left = "8px";
       chat.style.right = "8px";
-      chat.style.borderRadius = "18px";
+      chat.style.borderRadius = "16px";
     } else {
       chat.style.width = "360px";
       chat.style.height = "500px";
@@ -142,12 +113,13 @@
       chat.style.borderRadius = "16px";
     }
   }
-
   sizeChat();
+  window.addEventListener("resize", sizeChat);
+
   document.body.appendChild(chat);
 
   /* ===============================
-     HEADER (SWIPE + SAFE)
+     HEADER
      =============================== */
   const header = document.createElement("div");
   header.style.display = "flex";
@@ -158,18 +130,6 @@
   header.style.fontWeight = "600";
   header.style.borderTopLeftRadius = "16px";
   header.style.borderTopRightRadius = "16px";
-
-  let startY = null;
-  if (isMobile()) {
-    header.addEventListener("touchstart", e => {
-      startY = e.touches[0].clientY;
-    });
-    header.addEventListener("touchmove", e => {
-      if (!startY) return;
-      const delta = e.touches[0].clientY - startY;
-      if (delta > 80) closeChat();
-    });
-  }
 
   const headerLeft = document.createElement("div");
   headerLeft.style.display = "flex";
@@ -205,8 +165,7 @@
   messages.style.flex = "1";
   messages.style.padding = "16px";
   messages.style.overflowY = "auto";
-  messages.style.background = theme.panel;
-  messages.style.color = theme.text;
+  messages.style.background = "#fafafa";
   chat.appendChild(messages);
 
   const typing = document.createElement("div");
@@ -230,11 +189,11 @@
   }
 
   /* ===============================
-     INPUT (KEYBOARD SAFE)
+     INPUT (NO ZOOM SAFE)
      =============================== */
   const inputWrap = document.createElement("div");
   inputWrap.style.padding = "16px";
-  inputWrap.style.borderTop = `1px solid ${theme.border}`;
+  inputWrap.style.borderTop = "1px solid #ddd";
 
   const textarea = document.createElement("textarea");
   textarea.placeholder = "Type a message…";
@@ -242,11 +201,10 @@
   textarea.style.width = "100%";
   textarea.style.padding = "12px";
   textarea.style.borderRadius = "8px";
-  textarea.style.border = `1px solid ${theme.border}`;
-  textarea.style.background = theme.bg;
-  textarea.style.color = theme.text;
+  textarea.style.border = "1px solid #ccc";
   textarea.style.resize = "none";
   textarea.style.boxSizing = "border-box";
+  textarea.style.fontSize = "16px"; // 🔥 prevents iOS zoom
 
   const send = document.createElement("button");
   send.textContent = "Send";
@@ -261,14 +219,6 @@
   inputWrap.appendChild(textarea);
   inputWrap.appendChild(send);
   chat.appendChild(inputWrap);
-
-  if (window.visualViewport) {
-    visualViewport.addEventListener("resize", () => {
-      if (isMobile()) {
-        chat.style.bottom = `${window.innerHeight - visualViewport.height + 12}px`;
-      }
-    });
-  }
 
   /* ===============================
      BRANDING
@@ -291,10 +241,10 @@
     msg.style.padding = "12px 14px";
     msg.style.borderRadius = "10px";
     msg.style.maxWidth = "80%";
-    msg.style.color = theme.text;
+    msg.style.color = "#000";
     msg.style.alignSelf = user ? "flex-end" : "flex-start";
-    msg.style.background = user ? theme.user : theme.bot;
-    msg.style.border = `1px solid ${theme.border}`;
+    msg.style.background = user ? "#e0e0e0" : "#fff";
+    msg.style.border = "1px solid #ddd";
     msg.textContent = text;
     messages.insertBefore(msg, typing);
     messages.scrollTop = messages.scrollHeight;
@@ -318,10 +268,12 @@
 
     const data = await res.json();
     hideTyping();
+
     if (!chatOpen) {
       unreadCount++;
       updateBadge();
     }
+
     addMessage(data.reply, false);
   }
 
@@ -347,3 +299,4 @@
 
   loadClientData();
 })();
+
