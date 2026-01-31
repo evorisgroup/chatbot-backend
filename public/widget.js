@@ -6,16 +6,23 @@
   let chatOpen = false;
   let typingInterval = null;
 
+  /* =======================
+     DEVICE DETECTION (SAFE)
+     ======================= */
   function isMobile() {
-  return (
-    "ontouchstart" in window ||
-    navigator.maxTouchPoints > 0 ||
-    window.matchMedia("(pointer: coarse)").matches
-  );
-}
+    return window.innerWidth <= 768;
+  }
 
+  function onResize() {
+    sizeBubble();
+    sizeChat();
+  }
 
-  // ---------- Fetch client data ----------
+  window.addEventListener("resize", onResize);
+
+  /* =======================
+     FETCH CLIENT DATA
+     ======================= */
   async function loadClientData() {
     const res = await fetch(
       `https://chatbot-backend-tawny-alpha.vercel.app/api/clientdata?client_id=${CLIENT_ID}`
@@ -24,7 +31,9 @@
     applyBranding();
   }
 
-  // ---------- Bubble ----------
+  /* =======================
+     CHAT BUBBLE
+     ======================= */
   const bubble = document.createElement("div");
   bubble.innerHTML = "💬";
   bubble.style.position = "fixed";
@@ -35,15 +44,18 @@
   bubble.style.alignItems = "center";
   bubble.style.justifyContent = "center";
   bubble.style.cursor = "pointer";
-  bubble.style.boxShadow = "0 6px 20px rgba(0,0,0,0.35)";
+  bubble.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
   bubble.style.zIndex = "999999";
   bubble.style.transition = "transform 0.2s ease";
 
+  bubble.onmouseenter = () => (bubble.style.transform = "scale(1.08)");
+  bubble.onmouseleave = () => (bubble.style.transform = "scale(1)");
+
   function sizeBubble() {
     if (isMobile()) {
-      bubble.style.width = "84px";
-      bubble.style.height = "84px";
-      bubble.style.fontSize = "34px";
+      bubble.style.width = "88px";
+      bubble.style.height = "88px";
+      bubble.style.fontSize = "36px";
     } else {
       bubble.style.width = "72px";
       bubble.style.height = "72px";
@@ -52,21 +64,22 @@
   }
 
   sizeBubble();
-  bubble.onmouseenter = () => (bubble.style.transform = "scale(1.08)");
-  bubble.onmouseleave = () => (bubble.style.transform = "scale(1)");
   document.body.appendChild(bubble);
 
-  // ---------- Chat Window ----------
+  /* =======================
+     CHAT WINDOW (FULL LAYOUT)
+     ======================= */
   const chat = document.createElement("div");
   chat.style.position = "fixed";
   chat.style.background = "#fff";
   chat.style.display = "flex";
   chat.style.flexDirection = "column";
-  chat.style.zIndex = "999998";
+  chat.style.boxShadow = "0 12px 32px rgba(0,0,0,0.35)";
   chat.style.transition = "transform 0.25s ease, opacity 0.25s ease";
   chat.style.opacity = "0";
   chat.style.pointerEvents = "none";
   chat.style.transform = "translateY(40px)";
+  chat.style.zIndex = "999998";
 
   function sizeChat() {
     if (isMobile()) {
@@ -87,46 +100,51 @@
   sizeChat();
   document.body.appendChild(chat);
 
-  // ---------- Header ----------
+  /* =======================
+     HEADER
+     ======================= */
   const header = document.createElement("div");
   header.style.display = "flex";
   header.style.alignItems = "center";
   header.style.justifyContent = "space-between";
-  header.style.padding = "14px";
+  header.style.padding = "16px";
   header.style.color = "#fff";
   header.style.fontWeight = "600";
+  header.style.flexShrink = "0";
 
-  const left = document.createElement("div");
-  left.style.display = "flex";
-  left.style.alignItems = "center";
-  left.style.gap = "10px";
+  const headerLeft = document.createElement("div");
+  headerLeft.style.display = "flex";
+  headerLeft.style.alignItems = "center";
+  headerLeft.style.gap = "10px";
 
   const logo = document.createElement("img");
-  logo.style.width = "28px";
-  logo.style.height = "28px";
+  logo.style.width = "30px";
+  logo.style.height = "30px";
   logo.style.borderRadius = "6px";
   logo.style.display = "none";
 
   const title = document.createElement("span");
   title.textContent = "Chat";
 
-  left.appendChild(logo);
-  left.appendChild(title);
+  headerLeft.appendChild(logo);
+  headerLeft.appendChild(title);
 
   const close = document.createElement("div");
   close.textContent = "✕";
   close.style.cursor = "pointer";
-  close.style.fontSize = "18px";
+  close.style.fontSize = "20px";
   close.onclick = closeChat;
 
-  header.appendChild(left);
+  header.appendChild(headerLeft);
   header.appendChild(close);
   chat.appendChild(header);
 
-  // ---------- Messages ----------
+  /* =======================
+     MESSAGES
+     ======================= */
   const messages = document.createElement("div");
   messages.style.flex = "1";
-  messages.style.padding = "14px";
+  messages.style.padding = "16px";
   messages.style.overflowY = "auto";
   messages.style.background = "#fafafa";
   chat.appendChild(messages);
@@ -151,10 +169,13 @@
     typing.style.display = "none";
   }
 
-  // ---------- Input ----------
+  /* =======================
+     INPUT
+     ======================= */
   const inputWrap = document.createElement("div");
-  inputWrap.style.padding = "14px";
+  inputWrap.style.padding = "16px";
   inputWrap.style.borderTop = "1px solid #ddd";
+  inputWrap.style.flexShrink = "0";
 
   const textarea = document.createElement("textarea");
   textarea.placeholder = "Type a message…";
@@ -180,7 +201,9 @@
   inputWrap.appendChild(send);
   chat.appendChild(inputWrap);
 
-  // ---------- Branding ----------
+  /* =======================
+     BRANDING
+     ======================= */
   function applyBranding() {
     if (!clientData) return;
     bubble.style.background = clientData.primary_color;
@@ -193,7 +216,9 @@
     }
   }
 
-  // ---------- Messages ----------
+  /* =======================
+     MESSAGES
+     ======================= */
   function addMessage(text, user) {
     const msg = document.createElement("div");
     msg.style.margin = "10px 0";
@@ -232,7 +257,9 @@
 
   send.onclick = sendMessage;
 
-  // ---------- Open / Close ----------
+  /* =======================
+     OPEN / CLOSE
+     ======================= */
   function openChat() {
     chat.style.opacity = "1";
     chat.style.pointerEvents = "auto";
@@ -248,12 +275,6 @@
   }
 
   bubble.onclick = () => (chatOpen ? closeChat() : openChat());
-
-  // ---------- Resize handling ----------
-  window.addEventListener("resize", () => {
-    sizeBubble();
-    sizeChat();
-  });
 
   loadClientData();
 })();
