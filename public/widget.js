@@ -7,10 +7,6 @@
   const API_BASE = "/api";
   const CLIENT_ID = window.CLIENT_ID;
 
-  /* =========================================================
-     STATE
-  ========================================================= */
-
   let clientData = null;
   let chatOpen = false;
 
@@ -39,6 +35,17 @@
       : fallback;
   }
 
+  function hoverable(styleBase, styleHover) {
+    if (isMobile()) return styleBase;
+
+    return {
+      ...styleBase,
+      transition: "all 0.18s ease",
+      onmouseenter: e => Object.assign(e.currentTarget.style, styleHover),
+      onmouseleave: e => Object.assign(e.currentTarget.style, styleBase)
+    };
+  }
+
   /* =========================================================
      LOAD CLIENT DATA
   ========================================================= */
@@ -60,33 +67,40 @@
   function initWidget() {
     const brand = safeColor(clientData.primary_color, "#2563eb");
 
-    /* ---- Bubble button ---- */
+    /* ---- Bubble ---- */
+
+    const bubbleBase = {
+      position: "fixed",
+      bottom: "20px",
+      right: "20px",
+      width: isMobile() ? "64px" : "56px",
+      height: isMobile() ? "64px" : "56px",
+      borderRadius: "50%",
+      background: brand,
+      color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "26px",
+      cursor: "pointer",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+      zIndex: 9999
+    };
+
+    const bubbleHover = {
+      transform: "scale(1.06)",
+      boxShadow: "0 12px 32px rgba(0,0,0,0.35)"
+    };
 
     const bubble = el("div", {
-      style: {
-        position: "fixed",
-        bottom: "20px",
-        right: "20px",
-        width: isMobile() ? "64px" : "56px",
-        height: isMobile() ? "64px" : "56px",
-        borderRadius: "50%",
-        background: brand,
-        color: "#fff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "26px",
-        cursor: "pointer",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-        zIndex: 9999
-      },
+      ...hoverable(bubbleBase, bubbleHover),
       onclick: toggleChat
     });
 
     bubble.textContent = "💬";
     document.body.appendChild(bubble);
 
-    /* ---- Chat window ---- */
+    /* ---- Chat Window ---- */
 
     const chat = el("div", {
       id: "chat-widget",
@@ -149,12 +163,19 @@
       }, [document.createTextNode(clientData.company_name || "Chat")])
     );
 
+    const closeBase = {
+      fontSize: "22px",
+      cursor: "pointer",
+      lineHeight: "1"
+    };
+
+    const closeHover = {
+      transform: "scale(1.2)",
+      opacity: "0.85"
+    };
+
     const closeBtn = el("div", {
-      style: {
-        fontSize: "22px",
-        cursor: "pointer",
-        lineHeight: "1"
-      },
+      ...hoverable(closeBase, closeHover),
       onclick: toggleChat
     }, [document.createTextNode("×")]);
 
@@ -194,20 +215,36 @@
         border: "1px solid #d1d5db",
         padding: "10px",
         fontSize: "14px",
-        outline: "none"
+        outline: "none",
+        transition: "border-color 0.15s ease, box-shadow 0.15s ease"
+      },
+      onfocus: e => {
+        e.target.style.borderColor = brand;
+        e.target.style.boxShadow = `0 0 0 2px ${brand}33`;
+      },
+      onblur: e => {
+        e.target.style.borderColor = "#d1d5db";
+        e.target.style.boxShadow = "none";
       }
     });
 
+    const sendBase = {
+      background: brand,
+      color: "#fff",
+      border: "none",
+      borderRadius: "12px",
+      padding: "0 16px",
+      cursor: "pointer",
+      fontSize: "14px"
+    };
+
+    const sendHover = {
+      transform: "translateY(-1px)",
+      boxShadow: "0 6px 16px rgba(0,0,0,0.25)"
+    };
+
     const sendBtn = el("button", {
-      style: {
-        background: brand,
-        color: "#fff",
-        border: "none",
-        borderRadius: "12px",
-        padding: "0 16px",
-        cursor: "pointer",
-        fontSize: "14px"
-      },
+      ...hoverable(sendBase, sendHover),
       onclick: sendMessage
     }, [document.createTextNode("Send")]);
 
@@ -246,7 +283,8 @@
           borderRadius: "12px",
           background: who === "user" ? brand : "#e5e7eb",
           color: who === "user" ? "#fff" : "#000",
-          alignSelf: who === "user" ? "flex-end" : "flex-start"
+          alignSelf: who === "user" ? "flex-end" : "flex-start",
+          transition: "opacity 0.15s ease"
         }
       }, [document.createTextNode(text)]);
 
