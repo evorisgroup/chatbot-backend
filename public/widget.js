@@ -35,7 +35,7 @@
     );
     clientData = await res.json();
     applyBranding();
-    maybeAddCallButton();
+    maybeAddCallButtonToHeader();
   }
 
   /* ===============================
@@ -53,7 +53,6 @@
   bubble.style.cursor = "pointer";
   bubble.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
   bubble.style.zIndex = "999999";
-  bubble.style.transition = "transform 0.2s ease";
 
   function sizeBubble() {
     bubble.style.width = isMobile() ? "88px" : "72px";
@@ -92,10 +91,10 @@
   chat.style.display = "flex";
   chat.style.flexDirection = "column";
   chat.style.boxShadow = "0 12px 32px rgba(0,0,0,0.35)";
-  chat.style.transition = "transform 0.25s ease, opacity 0.25s ease";
   chat.style.opacity = "0";
   chat.style.pointerEvents = "none";
   chat.style.transform = "translateY(40px)";
+  chat.style.transition = "transform 0.25s ease, opacity 0.25s ease";
   chat.style.zIndex = "999998";
   chat.style.overflow = "hidden";
 
@@ -161,31 +160,21 @@
   close.onclick = closeChat;
 
   headerRight.appendChild(close);
-
   header.appendChild(headerLeft);
   header.appendChild(headerRight);
   chat.appendChild(header);
 
-  /* ===============================
-     CALL BUTTON (MOBILE ONLY)
-     =============================== */
-  function maybeAddCallButton() {
-    if (!clientData?.phone_number) return;
-    if (!isMobile()) return;
+  function maybeAddCallButtonToHeader() {
+    if (!clientData?.phone_number || !isMobile()) return;
 
-    const callBtn = document.createElement("a");
-    callBtn.href = `tel:${clientData.phone_number}`;
-    callBtn.textContent = "📞";
-    callBtn.style.fontSize = "20px";
-    callBtn.style.textDecoration = "none";
-    callBtn.style.color = "#fff";
-    callBtn.style.cursor = "pointer";
-    callBtn.style.transition = "opacity 0.2s";
+    const callIcon = document.createElement("a");
+    callIcon.href = `tel:${clientData.phone_number}`;
+    callIcon.textContent = "📞";
+    callIcon.style.fontSize = "20px";
+    callIcon.style.color = "#fff";
+    callIcon.style.textDecoration = "none";
 
-    callBtn.onmouseenter = () => (callBtn.style.opacity = "0.7");
-    callBtn.onmouseleave = () => (callBtn.style.opacity = "1");
-
-    headerRight.insertBefore(callBtn, close);
+    headerRight.insertBefore(callIcon, close);
   }
 
   /* ===============================
@@ -232,9 +221,8 @@
   textarea.style.padding = "12px";
   textarea.style.borderRadius = "8px";
   textarea.style.border = "1px solid #ccc";
-  textarea.style.resize = "none";
-  textarea.style.boxSizing = "border-box";
   textarea.style.fontSize = "16px";
+  textarea.style.resize = "none";
 
   const send = document.createElement("button");
   send.textContent = "Send";
@@ -265,6 +253,25 @@
     }
   }
 
+  function addCallCTA() {
+    if (!isMobile() || !clientData?.phone_number) return;
+
+    const cta = document.createElement("a");
+    cta.href = `tel:${clientData.phone_number}`;
+    cta.textContent = "📞 Call Now";
+    cta.style.display = "inline-block";
+    cta.style.marginTop = "8px";
+    cta.style.padding = "10px 14px";
+    cta.style.borderRadius = "20px";
+    cta.style.background = clientData.primary_color;
+    cta.style.color = "#fff";
+    cta.style.textDecoration = "none";
+    cta.style.fontWeight = "600";
+
+    messages.appendChild(cta);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
   function addMessage(text, user) {
     const msg = document.createElement("div");
     msg.style.margin = "10px 0";
@@ -277,6 +284,15 @@
     msg.style.border = "1px solid #ddd";
     msg.textContent = text;
     messages.insertBefore(msg, typing);
+
+    if (
+      !user &&
+      clientData?.phone_number &&
+      /call|phone|reach us/i.test(text)
+    ) {
+      addCallCTA();
+    }
+
     messages.scrollTop = messages.scrollHeight;
   }
 
@@ -329,5 +345,6 @@
 
   loadClientData();
 })();
+
 
 
