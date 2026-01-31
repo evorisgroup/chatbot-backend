@@ -40,19 +40,26 @@ function formatWeeklyHours(weekly) {
     .join("\n");
 }
 
-function getNextOpenTime(weekly) {
+function getNextOpenTime(weekly, holidays = []) {
   if (!weekly) return null;
 
   const now = new Date();
-  const today = now.getDay();
+  const todayIndex = now.getDay();
+  const todayISO = now.toISOString().split("T")[0];
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
   for (let offset = 0; offset < 7; offset++) {
-    const dayIndex = (today + offset) % 7;
-    const dayKey = DAY_NAMES[dayIndex].toLowerCase();
-    const ranges = weekly[dayKey] || [];
+    const dayIndex = (todayIndex + offset) % 7;
+    const dayName = DAY_NAMES[dayIndex].toLowerCase();
 
-    for (const [start, end] of ranges) {
+    // Skip holidays
+    const checkDate = new Date(now);
+    checkDate.setDate(now.getDate() + offset);
+    const checkISO = checkDate.toISOString().split("T")[0];
+    if (holidays.includes(checkISO)) continue;
+
+    const ranges = weekly[dayName] || [];
+    for (const [start] of ranges) {
       const startMin = minutes(start);
       if (offset > 0 || startMin > currentMinutes) {
         return `${DAY_NAMES[dayIndex]} at ${formatTime(start)}`;
@@ -102,7 +109,10 @@ export default async function handler(req, res) {
 
     const openNow = isOpenNow(client.weekly_hours);
     const hoursText = formatWeeklyHours(client.weekly_hours);
-    const nextOpen = getNextOpenTime(client.weekly_hours);
+    const nextOpen = getNextOpenTime(
+    client.weekly_hours,
+    client.holiday_rules?.dates || []
+  );
 
     const context = `
 Company: ${client.company_name}
