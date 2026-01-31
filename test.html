@@ -2,36 +2,90 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Chat Widget Test</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Widget Test - NHH Solutions</title>
   <style>
+    /* Page background */
     body {
-      font-family: Arial, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #6C3BAA, #8E44AD);
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
     }
-    h1 {
+
+    /* Card container for content */
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 700px;
+      width: 90%;
       text-align: center;
-      color: #333;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+      backdrop-filter: blur(10px);
     }
-    p {
-      max-width: 600px;
-      margin: 0 auto 10px auto;
+
+    .card h1 {
+      margin-top: 0;
+      font-size: 2.5rem;
+      font-weight: 700;
+      text-shadow: 1px 1px 5px rgba(0,0,0,0.4);
+    }
+
+    .card p {
+      font-size: 1.2rem;
+      line-height: 1.6;
+      margin-top: 20px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
+    /* Widget container at bottom-right */
+    #chat-widget-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+    }
+
+    /* Optional: subtle hover effect for links/buttons inside card */
+    .card a {
+      color: #FFD700;
+      text-decoration: none;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+
+    .card a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
 
-<h1>Chat Widget Local Test</h1>
-<p>This page tests the dynamic AI chat widget fetching client data from your Vercel backend.</p>
+  <div class="card">
+    <h1>NHH Solutions Chat Widget</h1>
+    <p>
+      Test the dynamic chat widget with live data from Supabase.
+      Click the chat icon in the bottom right to start interacting with the AI assistant.
+    </p>
+  </div>
 
-<!-- Set CLIENT_ID here for testing -->
-<script>
-  window.CLIENT_ID = "acme123"; // Must match an entry in /api/clientdata.js
-</script>
+  <!-- Widget container -->
+  <div id="chat-widget-container"></div>
 
-<!-- Include your widget.js -->
-<script src="widget.js"></script>
+  <!-- Client ID and API endpoint -->
+  <script>
+    window.CLIENT_ID = "nhh"; // must match your Supabase row client_id
+    window.API_ENDPOINT = "https://chatbot-backend-tawny-alpha.vercel.app/api/clientdata";
+  </script>
+
+  <!-- Include the chat widget -->
+  <script src="widget.js"></script>
 
 </body>
 </html>
