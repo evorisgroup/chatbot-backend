@@ -1,4 +1,9 @@
+import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export default async function handler(req, res) {
   try {
@@ -6,25 +11,17 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_KEY = process.env.SUPABASE_KEY;
+    const { message, client_id } = req.body;
 
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-      console.error("Missing Supabase environment variables");
-      return res.status(500).json({
-        reply: "Server configuration error.",
-      });
+    if (!message || !client_id) {
+      return res.status(400).json({ reply: "Invalid request." });
     }
 
-    const { message, client_id } = req.body || {};
-
-    if (!client_id || !message) {
-      return res.status(400).json({
-        reply: "Invalid request.",
-      });
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    // --- Supabase ---
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_KEY
+    );
 
     const { data: client, error } = await supabase
       .from("clients")
@@ -33,51 +30,64 @@ export default async function handler(req, res) {
       .single();
 
     if (error || !client) {
-      console.error("Supabase error:", error);
       return res.json({
-        reply: "I could not load company data right now.",
+        reply: "I couldn't load company information right now.",
       });
     }
 
-    const msg = message.toLowerCase();
-    const name = client.company_name;
+    // --- Build company context ---
+    const companyContext = `
+Company Name: ${client.company_name}
 
-    if (msg.includes("name")) {
-      return res.json({ reply: `This company is called ${name}.` });
-    }
+Company Description:
+${client.company_info}
 
-    if (msg.includes("what do you do") || msg.includes("info")) {
-      return res.json({ reply: client.company_info });
-    }
+Products:
+${client.products.map(p => `- ${p.name}: $${p.price}`).join("\n")}
 
-    if (msg.includes("product")) {
-      const products = client.products
-        .map((p) => `${p.name} ($${p.price})`)
-        .join(", ");
-      return res.json({ reply: `Products: ${products}` });
-    }
+Locations:
+${client.locations.join(", ")}
 
-    if (msg.includes("location")) {
-      return res.json({
-        reply: `They operate in: ${client.locations.join(", ")}`,
-      });
-    }
+FAQs:
+${client.faqs.map(f => `Q: ${f.q}\nA: ${f.a}`).join("\n\n")}
+`;
 
-    if (msg.includes("faq")) {
-      const faqs = client.faqs
-        .map((f) => `Q: ${f.q}\nA: ${f.a}`)
-        .join("\n\n");
-      return res.json({ reply: faqs });
-    }
-
-    return res.json({
-      reply: `I'm here to answer questions about ${name}.`,
+    // --- AI Prompt ---
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a customer support chatbot for the company below.
+Only answer using the provided company information.
+If the question cannot be answered, politely say you don't have that information.
+Be clear, concise, and professional.
+          `,
+        },
+        {
+          role: "system",
+          content: companyContext,
+        },
+        {
+          role: "user",
+          content: message,
+        },
+      ],
+      temperature: 0.3,
     });
+
+    const reply =
+      completion.choices?.[0]?.message?.content ||
+      "I'm not sure how to answer that.";
+
+    return res.json({ reply });
   } catch (err) {
-    console.error("chat.js crash:", err);
+    console.error("AI chat error:", err);
     return res.status(500).json({
-      reply: "Internal server error.",
+      reply: "There was an error generating a response.",
     });
   }
 }
+
 
