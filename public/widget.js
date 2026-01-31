@@ -20,16 +20,41 @@
   let clientData = null;
   let chatOpen = false;
   let typingInterval = null;
+  let unreadCount = 0;
 
+  /* ===============================
+     HELPERS
+     =============================== */
   function isMobile() {
     return window.innerWidth <= 768;
   }
 
-  window.addEventListener("resize", () => {
-    sizeBubble();
-    sizeChat();
-  });
+  const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
+  const colors = {
+    light: {
+      bg: "#ffffff",
+      panel: "#fafafa",
+      text: "#000",
+      user: "#e0e0e0",
+      bot: "#ffffff",
+      border: "#ddd",
+    },
+    dark: {
+      bg: "#1e1e1e",
+      panel: "#2a2a2a",
+      text: "#fff",
+      user: "#3a3a3a",
+      bot: "#2a2a2a",
+      border: "#444",
+    },
+  };
+
+  const theme = isDarkMode ? colors.dark : colors.light;
+
+  /* ===============================
+     FETCH CLIENT DATA
+     =============================== */
   async function loadClientData() {
     const res = await fetch(
       `https://chatbot-backend-tawny-alpha.vercel.app/api/clientdata?client_id=${CLIENT_ID}`
@@ -55,30 +80,43 @@
   bubble.style.zIndex = "999999";
   bubble.style.transition = "transform 0.2s ease";
 
-  bubble.onmouseenter = () => (bubble.style.transform = "scale(1.08)");
-  bubble.onmouseleave = () => (bubble.style.transform = "scale(1)");
-
   function sizeBubble() {
-    if (isMobile()) {
-      bubble.style.width = "88px";
-      bubble.style.height = "88px";
-      bubble.style.fontSize = "36px";
-    } else {
-      bubble.style.width = "72px";
-      bubble.style.height = "72px";
-      bubble.style.fontSize = "28px";
-    }
+    bubble.style.width = isMobile() ? "88px" : "72px";
+    bubble.style.height = isMobile() ? "88px" : "72px";
+    bubble.style.fontSize = isMobile() ? "36px" : "28px";
   }
 
   sizeBubble();
   document.body.appendChild(bubble);
+
+  /* ---------- Unread Badge ---------- */
+  const badge = document.createElement("div");
+  badge.style.position = "absolute";
+  badge.style.top = "6px";
+  badge.style.right = "6px";
+  badge.style.background = "red";
+  badge.style.color = "white";
+  badge.style.borderRadius = "50%";
+  badge.style.fontSize = "12px";
+  badge.style.padding = "2px 6px";
+  badge.style.display = "none";
+  bubble.appendChild(badge);
+
+  function updateBadge() {
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount;
+      badge.style.display = "block";
+    } else {
+      badge.style.display = "none";
+    }
+  }
 
   /* ===============================
      CHAT WINDOW
      =============================== */
   const chat = document.createElement("div");
   chat.style.position = "fixed";
-  chat.style.background = "#fff";
+  chat.style.background = theme.bg;
   chat.style.display = "flex";
   chat.style.flexDirection = "column";
   chat.style.boxShadow = "0 12px 32px rgba(0,0,0,0.35)";
@@ -87,7 +125,7 @@
   chat.style.pointerEvents = "none";
   chat.style.transform = "translateY(40px)";
   chat.style.zIndex = "999998";
-  chat.style.overflow = "hidden"; // REQUIRED for rounded corners
+  chat.style.overflow = "hidden";
 
   function sizeChat() {
     if (isMobile()) {
@@ -95,12 +133,8 @@
       chat.style.bottom = "12px";
       chat.style.left = "8px";
       chat.style.right = "8px";
-      chat.style.width = "auto";
-      chat.style.height = "auto";
-      chat.style.borderRadius = "16px";
+      chat.style.borderRadius = "18px";
     } else {
-      chat.style.top = "auto";
-      chat.style.left = "auto";
       chat.style.width = "360px";
       chat.style.height = "500px";
       chat.style.bottom = "110px";
@@ -113,7 +147,7 @@
   document.body.appendChild(chat);
 
   /* ===============================
-     HEADER (FIXED CORNERS)
+     HEADER (SWIPE + SAFE)
      =============================== */
   const header = document.createElement("div");
   header.style.display = "flex";
@@ -122,11 +156,20 @@
   header.style.padding = "16px";
   header.style.color = "#fff";
   header.style.fontWeight = "600";
-  header.style.flexShrink = "0";
-
-  // 🔥 THIS IS THE FIX 🔥
   header.style.borderTopLeftRadius = "16px";
   header.style.borderTopRightRadius = "16px";
+
+  let startY = null;
+  if (isMobile()) {
+    header.addEventListener("touchstart", e => {
+      startY = e.touches[0].clientY;
+    });
+    header.addEventListener("touchmove", e => {
+      if (!startY) return;
+      const delta = e.touches[0].clientY - startY;
+      if (delta > 80) closeChat();
+    });
+  }
 
   const headerLeft = document.createElement("div");
   headerLeft.style.display = "flex";
@@ -149,7 +192,6 @@
   close.textContent = "✕";
   close.style.cursor = "pointer";
   close.style.fontSize = "20px";
-  close.style.lineHeight = "1";
   close.onclick = closeChat;
 
   header.appendChild(headerLeft);
@@ -163,7 +205,8 @@
   messages.style.flex = "1";
   messages.style.padding = "16px";
   messages.style.overflowY = "auto";
-  messages.style.background = "#fafafa";
+  messages.style.background = theme.panel;
+  messages.style.color = theme.text;
   chat.appendChild(messages);
 
   const typing = document.createElement("div");
@@ -187,12 +230,11 @@
   }
 
   /* ===============================
-     INPUT
+     INPUT (KEYBOARD SAFE)
      =============================== */
   const inputWrap = document.createElement("div");
   inputWrap.style.padding = "16px";
-  inputWrap.style.borderTop = "1px solid #ddd";
-  inputWrap.style.flexShrink = "0";
+  inputWrap.style.borderTop = `1px solid ${theme.border}`;
 
   const textarea = document.createElement("textarea");
   textarea.placeholder = "Type a message…";
@@ -200,7 +242,9 @@
   textarea.style.width = "100%";
   textarea.style.padding = "12px";
   textarea.style.borderRadius = "8px";
-  textarea.style.border = "1px solid #ccc";
+  textarea.style.border = `1px solid ${theme.border}`;
+  textarea.style.background = theme.bg;
+  textarea.style.color = theme.text;
   textarea.style.resize = "none";
   textarea.style.boxSizing = "border-box";
 
@@ -217,6 +261,14 @@
   inputWrap.appendChild(textarea);
   inputWrap.appendChild(send);
   chat.appendChild(inputWrap);
+
+  if (window.visualViewport) {
+    visualViewport.addEventListener("resize", () => {
+      if (isMobile()) {
+        chat.style.bottom = `${window.innerHeight - visualViewport.height + 12}px`;
+      }
+    });
+  }
 
   /* ===============================
      BRANDING
@@ -239,10 +291,10 @@
     msg.style.padding = "12px 14px";
     msg.style.borderRadius = "10px";
     msg.style.maxWidth = "80%";
-    msg.style.color = "#000";
+    msg.style.color = theme.text;
     msg.style.alignSelf = user ? "flex-end" : "flex-start";
-    msg.style.background = user ? "#e0e0e0" : "#fff";
-    msg.style.border = user ? "none" : "1px solid #ddd";
+    msg.style.background = user ? theme.user : theme.bot;
+    msg.style.border = `1px solid ${theme.border}`;
     msg.textContent = text;
     messages.insertBefore(msg, typing);
     messages.scrollTop = messages.scrollHeight;
@@ -266,12 +318,18 @@
 
     const data = await res.json();
     hideTyping();
+    if (!chatOpen) {
+      unreadCount++;
+      updateBadge();
+    }
     addMessage(data.reply, false);
   }
 
   send.onclick = sendMessage;
 
   function openChat() {
+    unreadCount = 0;
+    updateBadge();
     chat.style.opacity = "1";
     chat.style.pointerEvents = "auto";
     chat.style.transform = "translateY(0)";
