@@ -21,7 +21,10 @@ const CALL_INTENT_REGEX =
   /(call|phone|appointment|book|schedule|pricing|price|cost|order|quote)/i;
 
 const AVAILABILITY_REGEX =
-  /(are you open|open today|open now|hours today|what are your hours|business hours|when are you open)/i;
+  /(are you open|open today|open now|business hours|hours today|hours|availability|when are you open)/i;
+
+const NEXT_OPEN_REGEX =
+  /(when do you open next|next opening|what time do you open next|when should i call|when do you open)/i;
 
 /* ===============================
    TIME HELPERS
@@ -62,9 +65,9 @@ function getHoursToday(client) {
   const ranges = client.weekly_hours[dayKey] || [];
   if (!ranges.length) return null;
 
-  return ranges
-    .map(([s, e]) => `${formatTime(s)} – ${formatTime(e)}`)
-    .join(", ");
+  return ranges.map(
+    ([s, e]) => `${formatTime(s)} – ${formatTime(e)}`
+  ).join(", ");
 }
 
 function getNextOpenTime(client) {
@@ -108,11 +111,9 @@ export default async function handler(req, res) {
 
     const trimmed = message.trim();
 
-    // Greeting only
+    // Greeting-only
     if (GREETING_ONLY_REGEX.test(trimmed)) {
-      return res.json({
-        reply: "Hi! How can I help you today?"
-      });
+      return res.json({ reply: "Hi! How can I help you today?" });
     }
 
     const supabase = createClient(
@@ -135,29 +136,45 @@ export default async function handler(req, res) {
     const nextOpen = getNextOpenTime(client);
 
     /* ===============================
-       AVAILABILITY QUESTIONS (HARD PATH)
+       HARD BUSINESS ANSWERS
        =============================== */
 
+    // "What time do you open next"
+    if (NEXT_OPEN_REGEX.test(trimmed)) {
+      if (openNow && hoursToday) {
+        return res.json({
+          reply: `We’re already open today. Our hours today are ${hoursToday}.`
+        });
+      }
+      if (!openNow && nextOpen) {
+        return res.json({
+          reply: `Our next opening is ${nextOpen}.`
+        });
+      }
+      return res.json({
+        reply: "Our opening hours vary by day. Let me know how else I can help."
+      });
+    }
+
+    // "Are you open / hours today"
     if (AVAILABILITY_REGEX.test(trimmed)) {
       if (openNow && hoursToday) {
         return res.json({
           reply: `Yes, we’re open today from ${hoursToday}.`
         });
       }
-
       if (!openNow && nextOpen) {
         return res.json({
-          reply: `No, we’re currently closed. Our next opening is ${nextOpen}.`
+          reply: `We’re currently closed. Our next opening is ${nextOpen}.`
         });
       }
-
       return res.json({
-        reply: "Our business hours vary by day. Let me know what you’re looking for and I can help."
+        reply: "Our hours vary by day. Let me know what you’re looking for."
       });
     }
 
     /* ===============================
-       AI PATH
+       AI PATH (SAFE)
        =============================== */
 
     const callRelevant = CALL_INTENT_REGEX.test(trimmed);
@@ -167,9 +184,10 @@ Company: ${client.company_name}
 Description: ${client.company_info}
 
 Rules:
-- Be helpful, calm, and professional.
-- Do not mention hours or closure unless calling is relevant.
-- Do not invent hours.
+- Answer only with known company info.
+- Never invent hours or availability.
+- Do not discourage customers.
+- Do not mention hours unless relevant.
 `;
 
     if (callRelevant) {
@@ -184,7 +202,7 @@ ${hoursToday ? `Today's hours: ${hoursToday}` : ""}
         context += `
 Calling:
 - Business is CLOSED.
-- Do NOT recommend calling now.
+- Do not suggest calling now.
 ${nextOpen ? `Next opening: ${nextOpen}` : ""}
 Phone number: ${client.phone_number}
 `;
@@ -198,12 +216,12 @@ Phone number: ${client.phone_number}
         {
           role: "system",
           content: `
-You are a customer-facing assistant for a local service business.
+You are a customer assistant for a local service company.
 
 Hard rules:
-- Never invent hours.
-- Never imply availability incorrectly.
-- Answer the user's question directly.
+- Never guess business hours.
+- Never claim availability incorrectly.
+- Answer directly.
 - Max 3 sentences.
 - Do not mention being an AI.
 `
@@ -214,16 +232,13 @@ Hard rules:
     });
 
     return res.json({
-      reply:
-        completion.choices[0]?.message?.content ||
-        "How can I help you?"
+      reply: completion.choices[0]?.message?.content || "How can I help you?"
     });
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({
-      reply: "Something went wrong."
-    });
+    return res.status(500).json({ reply: "Something went wrong." });
   }
 }
+
 
