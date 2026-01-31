@@ -7,8 +7,7 @@ const supabase = createClient(
 );
 
 /* =========================================================
-   NORMALIZATION HELPERS
-   These make the bot tolerant of real-world Supabase data
+   NORMALIZATION & SAFETY HELPERS
 ========================================================= */
 
 function normalize(text) {
@@ -20,31 +19,23 @@ function normalize(text) {
 }
 
 function isPureGreeting(message) {
-  const n = normalize(message);
-  return ["hi", "hello", "hey", "hey there", "yo", "sup"].includes(n);
+  return ["hi", "hello", "hey", "hey there", "yo", "sup"].includes(
+    normalize(message)
+  );
 }
 
-/**
- * Accepts MANY possible hour formats and returns one shape:
- * { open: "09:00", close: "17:00", closed: false }
- */
 function normalizeHours(raw) {
   if (!raw) return { closed: true };
-
-  // Explicit closed
   if (raw.closed === true) return { closed: true };
 
-  // { open, close }
   if (raw.open && raw.close) {
     return { open: raw.open, close: raw.close, closed: false };
   }
 
-  // { start, end }
   if (raw.start && raw.end) {
     return { open: raw.start, close: raw.end, closed: false };
   }
 
-  // ["09:00", "17:00"]
   if (Array.isArray(raw) && raw.length === 2) {
     return { open: raw[0], close: raw[1], closed: false };
   }
@@ -53,9 +44,7 @@ function normalizeHours(raw) {
 }
 
 function formatWeeklyHours(weeklyHours) {
-  if (!weeklyHours) {
-    return "Our business hours are not available.";
-  }
+  if (!weeklyHours) return "Our business hours are currently unavailable.";
 
   return Object.entries(weeklyHours)
     .map(([day, raw]) => {
@@ -81,11 +70,11 @@ function isOpenNow(weeklyHours) {
   const h = normalizeHours(weeklyHours[day]);
   if (h.closed || !h.open || !h.close) return false;
 
-  const minsNow = now.getHours() * 60 + now.getMinutes();
+  const current = now.getHours() * 60 + now.getMinutes();
   const [oh, om] = h.open.split(":").map(Number);
   const [ch, cm] = h.close.split(":").map(Number);
 
-  return minsNow >= oh * 60 + om && minsNow <= ch * 60 + cm;
+  return current >= oh * 60 + om && current <= ch * 60 + cm;
 }
 
 function nextOpenTime(weeklyHours) {
@@ -107,7 +96,6 @@ function nextOpenTime(weeklyHours) {
       return `${d.charAt(0).toUpperCase() + d.slice(1)} at ${h.open}`;
     }
   }
-
   return null;
 }
 
@@ -139,11 +127,11 @@ export default async function handler(req, res) {
     });
   }
 
-  /* ---------------- Greeting short-circuit ---------------- */
+  /* ---------------- Greeting ---------------- */
 
   if (isPureGreeting(message)) {
     return res.json({
-      reply: `Hi! How can I help you today?`
+      reply: `Hi! I’m the virtual assistant for ${client.company_name}. How can I help you today?`
     });
   }
 
@@ -155,8 +143,11 @@ export default async function handler(req, res) {
   /* ---------------- Primary intent ---------------- */
 
   switch (intent.primary_intent) {
+
+    /* ===== HOURS ===== */
+
     case "GENERAL_HOURS":
-      reply.push(formatWeeklyHours(client.weekly_hours));
+      reply.push(`Here are our regular business hours:\n${formatWeeklyHours(client.weekly_hours)}`);
       break;
 
     case "TODAY_HOURS": {
@@ -191,20 +182,58 @@ export default async function handler(req, res) {
       break;
     }
 
+    /* ===== SERVICES ===== */
+
     case "SERVICES_LIST":
       reply.push(
         Array.isArray(client.services) && client.services.length
-          ? `We offer:\n${client.services.join(", ")}`
-          : "Our services information isn’t available."
+          ? `We offer the following services:\n${client.services.join(", ")}`
+          : "Our service information isn’t available right now."
       );
       break;
 
-    case "PRICING_GENERAL":
+    case "SERVICE_SPECIFIC":
       reply.push(
-        client.pricing_policy ||
-          "Pricing depends on the service and situation."
+        Array.isArray(client.services) && client.services.length
+          ? `Yes, we do offer ${intent.parameters.service}.`
+          : "I don’t have details on that service at the moment."
       );
       break;
+
+    case "EMERGENCY_SERVICE":
+      reply.push(
+        client.emergency_service
+          ? "Yes, we offer emergency service. Please call us for immediate assistance."
+          : "We don’t currently offer emergency service."
+      );
+      break;
+
+    /* ===== PRICING & PAYMENTS ===== */
+
+    case "PRICING_GENERAL":
+    case "PRICING_ESTIMATE":
+      reply.push(
+        client.pricing_policy ||
+          "Pricing varies depending on the service and situation."
+      );
+      break;
+
+    case "PAYMENT_METHODS":
+      reply.push(
+        Array.isArray(client.payment_methods) && client.payment_methods.length
+          ? `We accept the following payment methods:\n${client.payment_methods.join(", ")}`
+          : "Payment method information isn’t available."
+      );
+      break;
+
+    case "REFUNDS_POLICIES":
+      reply.push(
+        client.refunds_policy ||
+          "Refund policies depend on the service provided."
+      );
+      break;
+
+    /* ===== CONTACT & APPOINTMENTS ===== */
 
     case "CONTACT_PHONE":
       if (!intent.constraints.avoid_phone && client.contact_phone) {
@@ -212,27 +241,92 @@ export default async function handler(req, res) {
       }
       break;
 
+    case "CONTACT_EMAIL":
+      if (client.contact_email) {
+        reply.push(`You can email us at ${client.contact_email}.`);
+      }
+      break;
+
+    case "CONTACT_METHODS":
+      reply.push(
+        `You can reach us by phone${client.contact_email ? " or email" : ""}.`
+      );
+      break;
+
+    case "APPOINTMENT_HOW":
+      if (client.appointment_method === "online") {
+        reply.push("Appointments can be booked online.");
+      } else {
+        reply.push("Appointments are scheduled over the phone.");
+      }
+      break;
+
+    /* ===== LOCATIONS ===== */
+
+    case "LOCATIONS_LIST":
+      reply.push(
+        Array.isArray(client.locations) && client.locations.length
+          ? `We serve the following areas:\n${client.locations.join(", ")}`
+          : "Service location information isn’t available."
+      );
+      break;
+
+    case "SERVICE_AREA_CHECK":
+      reply.push(
+        Array.isArray(client.locations) && client.locations.includes(intent.parameters.location)
+          ? `Yes, we service ${intent.parameters.location}.`
+          : `Please contact us to confirm service availability in that area.`
+      );
+      break;
+
+    /* ===== COMPANY INFO ===== */
+
     case "COMPANY_OVERVIEW":
       reply.push(
         client.company_info ||
-          `We help customers with services provided by ${client.company_name}.`
+          `We provide professional services through ${client.company_name}.`
       );
       break;
+
+    case "LICENSES_CERTS":
+      reply.push(
+        client.licenses || "Licensing information is available upon request."
+      );
+      break;
+
+    case "INSURANCE":
+      reply.push(
+        client.insurance_info || "Insurance details are available upon request."
+      );
+      break;
+
+    /* ===== FAQ ===== */
+
+    case "FAQ_MATCH":
+      if (Array.isArray(client.faqs) && client.faqs.length) {
+        const match = client.faqs.find(f =>
+          normalize(message).includes(normalize(f.q))
+        );
+        reply.push(match ? match.a : "I can help answer common questions.");
+      }
+      break;
+
+    /* ===== FALLBACK ===== */
 
     case "UNKNOWN_INTENT":
     default:
       reply.push(
-        "I’m here to help. You can ask about our hours, services, pricing, or how to contact us."
+        "I can help with information about our services, hours, pricing, or how to contact us."
       );
   }
 
   /* ---------------- Secondary intent ---------------- */
 
   if (intent.secondary_intent === "GENERAL_HOURS") {
-    reply.push("\nOur regular hours:\n" + formatWeeklyHours(client.weekly_hours));
+    reply.push(`\nOur regular hours:\n${formatWeeklyHours(client.weekly_hours)}`);
   }
 
-  /* ---------------- Soft CTA (guarded) ---------------- */
+  /* ---------------- Soft CTA ---------------- */
 
   if (
     !intent.constraints.avoid_phone &&
@@ -240,11 +334,12 @@ export default async function handler(req, res) {
     client.contact_phone &&
     ["PRICING_GENERAL", "APPOINTMENT_HOW"].includes(intent.primary_intent)
   ) {
-    reply.push(`You can reach us at ${client.contact_phone} if you’d like to talk.`);
+    reply.push(`You can reach us at ${client.contact_phone} if you’d like to speak with us.`);
   }
 
   return res.json({
     reply: reply.join("\n")
   });
 }
+
 
