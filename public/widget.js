@@ -35,6 +35,7 @@
     );
     clientData = await res.json();
     applyBranding();
+    maybeAddCallButton();
   }
 
   /* ===============================
@@ -83,7 +84,7 @@
   }
 
   /* ===============================
-     CHAT WINDOW (STATIC)
+     CHAT WINDOW
      =============================== */
   const chat = document.createElement("div");
   chat.style.position = "fixed";
@@ -148,15 +149,44 @@
   headerLeft.appendChild(logo);
   headerLeft.appendChild(title);
 
+  const headerRight = document.createElement("div");
+  headerRight.style.display = "flex";
+  headerRight.style.alignItems = "center";
+  headerRight.style.gap = "14px";
+
   const close = document.createElement("div");
   close.textContent = "✕";
   close.style.cursor = "pointer";
   close.style.fontSize = "20px";
   close.onclick = closeChat;
 
+  headerRight.appendChild(close);
+
   header.appendChild(headerLeft);
-  header.appendChild(close);
+  header.appendChild(headerRight);
   chat.appendChild(header);
+
+  /* ===============================
+     CALL BUTTON (MOBILE ONLY)
+     =============================== */
+  function maybeAddCallButton() {
+    if (!clientData?.phone_number) return;
+    if (!isMobile()) return;
+
+    const callBtn = document.createElement("a");
+    callBtn.href = `tel:${clientData.phone_number}`;
+    callBtn.textContent = "📞";
+    callBtn.style.fontSize = "20px";
+    callBtn.style.textDecoration = "none";
+    callBtn.style.color = "#fff";
+    callBtn.style.cursor = "pointer";
+    callBtn.style.transition = "opacity 0.2s";
+
+    callBtn.onmouseenter = () => (callBtn.style.opacity = "0.7");
+    callBtn.onmouseleave = () => (callBtn.style.opacity = "1");
+
+    headerRight.insertBefore(callBtn, close);
+  }
 
   /* ===============================
      MESSAGES
@@ -189,7 +219,7 @@
   }
 
   /* ===============================
-     INPUT (NO ZOOM SAFE)
+     INPUT
      =============================== */
   const inputWrap = document.createElement("div");
   inputWrap.style.padding = "16px";
@@ -204,7 +234,7 @@
   textarea.style.border = "1px solid #ccc";
   textarea.style.resize = "none";
   textarea.style.boxSizing = "border-box";
-  textarea.style.fontSize = "16px"; // 🔥 prevents iOS zoom
+  textarea.style.fontSize = "16px";
 
   const send = document.createElement("button");
   send.textContent = "Send";
@@ -299,4 +329,5 @@
 
   loadClientData();
 })();
+
 
