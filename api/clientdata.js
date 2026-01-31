@@ -1,56 +1,43 @@
-import { createClient } from "@supabase/supabase-js";
+// /api/clientdata.js
+import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client with env variables
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Read environment variables (server-side only)
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-// In-memory cache
-let cache = {};
-let cacheTimestamp = {};
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+// Initialize Supabase client
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export default async function handler(req, res) {
-  const clientId = req.query.id;
-
-  if (!clientId) {
-    return res.status(400).json({ error: "Missing client_id in query" });
-  }
-
-  const now = Date.now();
-
-  // Serve from cache if still valid
-  if (cache[clientId] && now - (cacheTimestamp[clientId] || 0) < CACHE_DURATION) {
-    return res.status(200).json(cache[clientId]);
-  }
-
   try {
-    // Fetch client data from Supabase
-    const { data, error } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("client_id", clientId)
-      .single();
+    // Extract client_id from query string reliably
+    let client_id = req.query?.client_id;
 
-    if (error || !data) {
-      return res.status(404).json({ error: "Client not found" });
+    // Fallback: parse from full URL in case req.query is empty
+    if (!client_id && req.url) {
+      const url = new URL(req.url, `https://${req.headers.host}`);
+      client_id = url.searchParams.get('client_id');
     }
 
-    // Update cache
-    cache[clientId] = data;
-    cacheTimestamp[clientId] = now;
+    if (!client_id) {
+      return res.status(400).json({ error: 'Missing client_id' });
+    }
 
-    // CORS headers so any site can fetch this
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    if (req.method === "OPTIONS") return res.status(200).end();
+    // Fetch client data from Supabase
+    const { data: client, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('client_id', client_id)
+      .single();
 
-    res.status(200).json(data);
+    if (error || !client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    // Return client data as JSON
+    return res.status(200).json(client);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error in /api/clientdata:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }
-
