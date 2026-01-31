@@ -9,10 +9,9 @@
   let chatOpen = false;
 
   /* =========================================================
-     HARD REQUIREMENTS
+     HARD REQUIREMENTS (LOCKED)
   ========================================================= */
 
-  // Lock viewport (prevents iOS zoom / scaling bugs)
   (function ensureViewportMeta() {
     let meta = document.querySelector('meta[name="viewport"]');
     if (!meta) {
@@ -32,7 +31,6 @@
     return navigator.maxTouchPoints > 0;
   }
 
-  // IMPORTANT: do NOT cache this result
   function isMobileNow() {
     return isTouchDevice() && !supportsHover();
   }
@@ -59,7 +57,7 @@
   }
 
   /* =========================================================
-     LAUNCHER (ALWAYS RENDERED)
+     LAUNCHER (ALWAYS VISIBLE)
   ========================================================= */
 
   const bubble = el("div", {
@@ -78,11 +76,24 @@
       fontSize: "26px",
       cursor: "pointer",
       boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-      zIndex: 9999
+      zIndex: 9999,
+      transition: "transform 0.15s ease, box-shadow 0.15s ease"
     },
     onclick: toggleChat
   });
   bubble.textContent = "💬";
+
+  if (supportsHover()) {
+    bubble.onmouseenter = () => {
+      bubble.style.transform = "scale(1.06)";
+      bubble.style.boxShadow = "0 12px 32px rgba(0,0,0,0.35)";
+    };
+    bubble.onmouseleave = () => {
+      bubble.style.transform = "none";
+      bubble.style.boxShadow = "0 8px 24px rgba(0,0,0,0.25)";
+    };
+  }
+
   document.body.appendChild(bubble);
 
   /* =========================================================
@@ -93,10 +104,8 @@
     .then(r => r.json())
     .then(data => {
       clientData = data;
-      bubble.style.background = safeColor(
-        data.primary_color,
-        "#2563eb"
-      );
+      const brand = safeColor(data.primary_color, "#2563eb");
+      bubble.style.background = brand;
     })
     .catch(() => {});
 
@@ -122,6 +131,8 @@
       }
     });
 
+    /* ---- Header ---- */
+
     const header = el("div", {
       style: {
         background: brand,
@@ -133,18 +144,76 @@
       }
     });
 
-    header.appendChild(
-      el("div", { style: { fontWeight: "600" } },
+    const headerLeft = el("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: "10px"
+      }
+    });
+
+    if (clientData?.logo_url) {
+      const logoWrap = el("div", {
+        style: {
+          width: "36px",
+          height: "36px",
+          borderRadius: "6px",
+          overflow: "hidden",
+          background: "#fff",
+          flexShrink: "0"
+        }
+      });
+
+      logoWrap.appendChild(
+        el("img", {
+          src: clientData.logo_url,
+          style: {
+            width: "100%",
+            height: "100%",
+            objectFit: "cover"
+          }
+        })
+      );
+
+      headerLeft.appendChild(logoWrap);
+    }
+
+    headerLeft.appendChild(
+      el(
+        "div",
+        { style: { fontWeight: "600", fontSize: "15px" } },
         [document.createTextNode(clientData?.company_name || "Chat")]
       )
     );
 
-    header.appendChild(
-      el("div", {
-        style: { cursor: "pointer", fontSize: "22px" },
+    const closeBtn = el(
+      "div",
+      {
+        style: {
+          fontSize: "22px",
+          cursor: "pointer",
+          transition: "transform 0.15s ease, opacity 0.15s ease"
+        },
         onclick: toggleChat
-      }, [document.createTextNode("×")])
+      },
+      [document.createTextNode("×")]
     );
+
+    if (supportsHover()) {
+      closeBtn.onmouseenter = () => {
+        closeBtn.style.transform = "scale(1.2)";
+        closeBtn.style.opacity = "0.85";
+      };
+      closeBtn.onmouseleave = () => {
+        closeBtn.style.transform = "none";
+        closeBtn.style.opacity = "1";
+      };
+    }
+
+    header.appendChild(headerLeft);
+    header.appendChild(closeBtn);
+
+    /* ---- Messages ---- */
 
     const messages = el("div", {
       style: {
@@ -155,6 +224,8 @@
         fontSize: "15px"
       }
     });
+
+    /* ---- Input ---- */
 
     const inputWrap = el("div", {
       style: {
@@ -174,10 +245,20 @@
         borderRadius: "12px",
         border: "1px solid #d1d5db",
         padding: "10px",
-        fontSize: "16px", // prevents iOS zoom
-        outline: "none"
+        fontSize: "16px",
+        outline: "none",
+        transition: "border-color 0.15s ease, box-shadow 0.15s ease"
       }
     });
+
+    input.onfocus = () => {
+      input.style.borderColor = brand;
+      input.style.boxShadow = `0 0 0 2px ${brand}33`;
+    };
+    input.onblur = () => {
+      input.style.borderColor = "#d1d5db";
+      input.style.boxShadow = "none";
+    };
 
     input.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -186,17 +267,33 @@
       }
     });
 
-    const sendBtn = el("button", {
-      style: {
-        background: brand,
-        color: "#fff",
-        border: "none",
-        borderRadius: "12px",
-        padding: "0 16px",
-        cursor: "pointer"
+    const sendBtn = el(
+      "button",
+      {
+        style: {
+          background: brand,
+          color: "#fff",
+          border: "none",
+          borderRadius: "12px",
+          padding: "0 16px",
+          cursor: "pointer",
+          transition: "transform 0.15s ease, box-shadow 0.15s ease"
+        },
+        onclick: sendMessage
       },
-      onclick: sendMessage
-    }, [document.createTextNode("Send")]);
+      [document.createTextNode("Send")]
+    );
+
+    if (supportsHover()) {
+      sendBtn.onmouseenter = () => {
+        sendBtn.style.transform = "translateY(-1px)";
+        sendBtn.style.boxShadow = "0 6px 16px rgba(0,0,0,0.25)";
+      };
+      sendBtn.onmouseleave = () => {
+        sendBtn.style.transform = "none";
+        sendBtn.style.boxShadow = "none";
+      };
+    }
 
     inputWrap.appendChild(input);
     inputWrap.appendChild(sendBtn);
@@ -206,9 +303,17 @@
     chat.appendChild(inputWrap);
     document.body.appendChild(chat);
 
+    /* ---- Default message (no tokens) ---- */
+
+    addMessage(
+      `Hi! I’m the virtual assistant for ${clientData?.company_name || "this company"}. How can I help you today?`,
+      "bot"
+    );
+
     function addMessage(text, who) {
-      messages.appendChild(
-        el("div", {
+      const msg = el(
+        "div",
+        {
           style: {
             marginBottom: "10px",
             maxWidth: "85%",
@@ -218,8 +323,10 @@
             color: who === "user" ? "#fff" : "#000",
             alignSelf: who === "user" ? "flex-end" : "flex-start"
           }
-        }, [document.createTextNode(text)])
+        },
+        [document.createTextNode(text)]
       );
+      messages.appendChild(msg);
       messages.scrollTop = messages.scrollHeight;
     }
 
@@ -233,18 +340,17 @@
       fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: CLIENT_ID, message: text })
+        body: JSON.stringify({
+          client_id: CLIENT_ID,
+          message: text
+        })
       })
         .then(r => r.json())
         .then(r => addMessage(r.reply, "bot"))
-        .catch(() => addMessage("Sorry, something went wrong.", "bot"));
+        .catch(() =>
+          addMessage("Sorry, something went wrong.", "bot")
+        );
     }
-
-    // default message
-    addMessage(
-      `Hi! I’m the virtual assistant for ${clientData?.company_name || "this company"}.`,
-      "bot"
-    );
   }
 
   /* =========================================================
