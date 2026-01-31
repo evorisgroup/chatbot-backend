@@ -5,13 +5,14 @@
   const CLIENT_ID = window.CLIENT_ID;
 
   let clientData = null;
+  let chat = null;
   let chatOpen = false;
 
   /* =========================================================
-     HARD MOBILE FIXES (DO NOT REMOVE)
+     HARD REQUIREMENTS
   ========================================================= */
 
-  // 1. Inject viewport meta if missing or wrong
+  // Lock viewport (prevents iOS zoom / scaling bugs)
   (function ensureViewportMeta() {
     let meta = document.querySelector('meta[name="viewport"]');
     if (!meta) {
@@ -23,125 +24,103 @@
       "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
   })();
 
+  function supportsHover() {
+    return window.matchMedia("(hover: hover)").matches;
+  }
+
   function isTouchDevice() {
-    return (
-      "ontouchstart" in window ||
-      navigator.maxTouchPoints > 0
-    );
+    return navigator.maxTouchPoints > 0;
   }
 
-  function isMobile() {
-  return isTouchDevice() && !supportsHover();
-}
-
-
-  function getSafeHeight() {
-    if (window.visualViewport && window.visualViewport.height) {
-      return window.visualViewport.height;
-    }
-    return window.innerHeight;
+  // IMPORTANT: do NOT cache this result
+  function isMobileNow() {
+    return isTouchDevice() && !supportsHover();
   }
 
-  /* =========================================================
-     DOM HELPERS
-  ========================================================= */
+  function safeHeight() {
+    return window.visualViewport
+      ? window.visualViewport.height
+      : window.innerHeight;
+  }
 
   function el(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
     Object.entries(attrs).forEach(([k, v]) => {
       if (k === "style") Object.assign(e.style, v);
-      else if (k.startsWith("on")) e.addEventListener(k.substring(2), v);
+      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
       else e.setAttribute(k, v);
     });
     children.forEach(c => e.appendChild(c));
     return e;
   }
 
-  function safeColor(color, fallback) {
-    return typeof color === "string" && color.startsWith("#")
-      ? color
-      : fallback;
+  function safeColor(c, f) {
+    return typeof c === "string" && c.startsWith("#") ? c : f;
   }
 
   /* =========================================================
-     LOAD CLIENT DATA
+     LAUNCHER (ALWAYS RENDERED)
+  ========================================================= */
+
+  const bubble = el("div", {
+    style: {
+      position: "fixed",
+      bottom: "20px",
+      right: "20px",
+      width: "56px",
+      height: "56px",
+      borderRadius: "50%",
+      background: "#2563eb",
+      color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "26px",
+      cursor: "pointer",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+      zIndex: 9999
+    },
+    onclick: toggleChat
+  });
+  bubble.textContent = "💬";
+  document.body.appendChild(bubble);
+
+  /* =========================================================
+     LOAD CLIENT DATA (NON-BLOCKING)
   ========================================================= */
 
   fetch(`${API_BASE}/clientdata?client_id=${CLIENT_ID}`)
     .then(r => r.json())
     .then(data => {
       clientData = data;
-      initWidget();
-    });
+      bubble.style.background = safeColor(
+        data.primary_color,
+        "#2563eb"
+      );
+    })
+    .catch(() => {});
 
   /* =========================================================
-     INIT
+     BUILD CHAT (ON DEMAND)
   ========================================================= */
 
-  function initWidget() {
-    const brand = safeColor(clientData.primary_color, "#2563eb");
-    const mobile = isMobile();
+  function buildChat() {
+    if (chat) return;
 
-    /* ---- ROOT ---- */
+    const brand = safeColor(clientData?.primary_color, "#2563eb");
 
-    const root = el("div", {
+    chat = el("div", {
       style: {
         position: "fixed",
-        inset: "0",
-        zIndex: 9999,
-        visibility: "hidden",
-        opacity: "0",
-        transition: "opacity 0.2s ease",
-        pointerEvents: "none"
-      }
-    });
-    document.body.appendChild(root);
-
-    /* ---- BUBBLE ---- */
-
-    const bubble = el("div", {
-      style: {
-        position: "fixed",
-        bottom: "20px",
-        right: "20px",
-        width: mobile ? "72px" : "56px",
-        height: mobile ? "72px" : "56px",
-        borderRadius: "50%",
-        background: brand,
-        color: "#fff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "26px",
-        cursor: "pointer",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-        pointerEvents: "auto"
-      },
-      onclick: toggleChat
-    });
-    bubble.textContent = "💬";
-
-    /* ---- CHAT WINDOW ---- */
-
-    const chat = el("div", {
-      style: {
-        position: "fixed",
-        left: mobile ? "8px" : "auto",
-        right: mobile ? "8px" : "20px",
-        bottom: mobile ? "8px" : "90px",
-        width: mobile ? "auto" : "360px",
-        height: mobile ? `${getSafeHeight() - 16}px` : "520px",
         background: "#fff",
         borderRadius: "16px",
         boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
         display: "none",
         flexDirection: "column",
         overflow: "hidden",
-        pointerEvents: "auto"
+        zIndex: 9999
       }
     });
-
-    /* ---- HEADER ---- */
 
     const header = el("div", {
       style: {
@@ -150,69 +129,39 @@
         padding: "14px 16px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
-        flexShrink: "0"
+        justifyContent: "space-between"
       }
     });
 
-    const headerLeft = el("div", {
-      style: { display: "flex", alignItems: "center", gap: "10px" }
-    });
-
-    if (clientData.logo_url) {
-      const logoWrap = el("div", {
-        style: {
-          width: "36px",
-          height: "36px",
-          borderRadius: "6px",
-          overflow: "hidden",
-          background: "#fff"
-        }
-      });
-      logoWrap.appendChild(
-        el("img", {
-          src: clientData.logo_url,
-          style: { width: "100%", height: "100%", objectFit: "cover" }
-        })
-      );
-      headerLeft.appendChild(logoWrap);
-    }
-
-    headerLeft.appendChild(
+    header.appendChild(
       el("div", { style: { fontWeight: "600" } },
-        [document.createTextNode(clientData.company_name || "Chat")]
+        [document.createTextNode(clientData?.company_name || "Chat")]
       )
     );
 
-    const closeBtn = el("div", {
-      style: { fontSize: "22px", cursor: "pointer" },
-      onclick: toggleChat
-    }, [document.createTextNode("×")]);
-
-    header.appendChild(headerLeft);
-    header.appendChild(closeBtn);
-
-    /* ---- MESSAGES ---- */
+    header.appendChild(
+      el("div", {
+        style: { cursor: "pointer", fontSize: "22px" },
+        onclick: toggleChat
+      }, [document.createTextNode("×")])
+    );
 
     const messages = el("div", {
       style: {
         flex: "1",
-        padding: mobile ? "16px" : "12px",
+        padding: "16px",
         overflowY: "auto",
         background: "#f8fafc",
-        fontSize: mobile ? "16px" : "14px"
+        fontSize: "15px"
       }
     });
-
-    /* ---- INPUT ---- */
 
     const inputWrap = el("div", {
       style: {
         padding: "10px",
         borderTop: "1px solid #e5e7eb",
         display: "flex",
-        gap: "8px",
-        flexShrink: "0"
+        gap: "8px"
       }
     });
 
@@ -225,7 +174,7 @@
         borderRadius: "12px",
         border: "1px solid #d1d5db",
         padding: "10px",
-        fontSize: "16px", // 🔒 critical: prevents iOS zoom
+        fontSize: "16px", // prevents iOS zoom
         outline: "none"
       }
     });
@@ -244,7 +193,6 @@
         border: "none",
         borderRadius: "12px",
         padding: "0 16px",
-        fontSize: "14px",
         cursor: "pointer"
       },
       onclick: sendMessage
@@ -256,41 +204,22 @@
     chat.appendChild(header);
     chat.appendChild(messages);
     chat.appendChild(inputWrap);
-
-    root.appendChild(bubble);
-    root.appendChild(chat);
-
-    addMessage(
-      `Hi! I’m the virtual assistant for ${clientData.company_name}. How can I help you today?`,
-      "bot"
-    );
-
-    requestAnimationFrame(() => {
-      root.style.visibility = "visible";
-      root.style.opacity = "1";
-      root.style.pointerEvents = "auto";
-    });
-
-    /* ---- FUNCTIONS ---- */
-
-    function toggleChat() {
-      chatOpen = !chatOpen;
-      chat.style.display = chatOpen ? "flex" : "none";
-    }
+    document.body.appendChild(chat);
 
     function addMessage(text, who) {
-      const msg = el("div", {
-        style: {
-          marginBottom: "10px",
-          maxWidth: "85%",
-          padding: "12px 14px",
-          borderRadius: "12px",
-          background: who === "user" ? brand : "#e5e7eb",
-          color: who === "user" ? "#fff" : "#000",
-          alignSelf: who === "user" ? "flex-end" : "flex-start"
-        }
-      }, [document.createTextNode(text)]);
-      messages.appendChild(msg);
+      messages.appendChild(
+        el("div", {
+          style: {
+            marginBottom: "10px",
+            maxWidth: "85%",
+            padding: "12px 14px",
+            borderRadius: "12px",
+            background: who === "user" ? brand : "#e5e7eb",
+            color: who === "user" ? "#fff" : "#000",
+            alignSelf: who === "user" ? "flex-end" : "flex-start"
+          }
+        }, [document.createTextNode(text)])
+      );
       messages.scrollTop = messages.scrollHeight;
     }
 
@@ -310,8 +239,46 @@
         .then(r => addMessage(r.reply, "bot"))
         .catch(() => addMessage("Sorry, something went wrong.", "bot"));
     }
+
+    // default message
+    addMessage(
+      `Hi! I’m the virtual assistant for ${clientData?.company_name || "this company"}.`,
+      "bot"
+    );
+  }
+
+  /* =========================================================
+     TOGGLE CHAT (LAYOUT DECIDED HERE)
+  ========================================================= */
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+
+    if (!chatOpen) {
+      if (chat) chat.style.display = "none";
+      return;
+    }
+
+    buildChat();
+
+    const mobile = isMobileNow();
+
+    if (mobile) {
+      chat.style.left = "8px";
+      chat.style.right = "8px";
+      chat.style.bottom = "8px";
+      chat.style.width = "auto";
+      chat.style.height = `${safeHeight() - 16}px`;
+    } else {
+      chat.style.left = "auto";
+      chat.style.right = "20px";
+      chat.style.bottom = "90px";
+      chat.style.width = "360px";
+      chat.style.height = "520px";
+    }
+
+    chat.style.display = "flex";
   }
 })();
-
 
 
