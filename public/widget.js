@@ -1,5 +1,5 @@
 /* ===============================
-   ENSURE MOBILE VIEWPORT (WIDGET-ONLY)
+   ENSURE MOBILE VIEWPORT (SELF-CONTAINED)
    =============================== */
 (function ensureViewport() {
   try {
@@ -21,9 +21,6 @@
   let chatOpen = false;
   let typingInterval = null;
 
-  /* ===============================
-     DEVICE MODE (TRUST VIEWPORT NOW)
-     =============================== */
   function isMobile() {
     return window.innerWidth <= 768;
   }
@@ -33,9 +30,6 @@
     sizeChat();
   });
 
-  /* ===============================
-     FETCH CLIENT DATA
-     =============================== */
   async function loadClientData() {
     const res = await fetch(
       `https://chatbot-backend-tawny-alpha.vercel.app/api/clientdata?client_id=${CLIENT_ID}`
@@ -93,15 +87,20 @@
   chat.style.pointerEvents = "none";
   chat.style.transform = "translateY(40px)";
   chat.style.zIndex = "999998";
+  chat.style.overflow = "hidden"; // REQUIRED for rounded corners
 
   function sizeChat() {
     if (isMobile()) {
-      chat.style.width = "calc(100vw - 16px)";
-      chat.style.height = "calc(100vh - 16px)";
-      chat.style.bottom = "8px";
+      chat.style.top = "env(safe-area-inset-top, 12px)";
+      chat.style.bottom = "12px";
+      chat.style.left = "8px";
       chat.style.right = "8px";
+      chat.style.width = "auto";
+      chat.style.height = "auto";
       chat.style.borderRadius = "16px";
     } else {
+      chat.style.top = "auto";
+      chat.style.left = "auto";
       chat.style.width = "360px";
       chat.style.height = "500px";
       chat.style.bottom = "110px";
@@ -114,7 +113,7 @@
   document.body.appendChild(chat);
 
   /* ===============================
-     HEADER
+     HEADER (FIXED CORNERS)
      =============================== */
   const header = document.createElement("div");
   header.style.display = "flex";
@@ -124,6 +123,10 @@
   header.style.color = "#fff";
   header.style.fontWeight = "600";
   header.style.flexShrink = "0";
+
+  // 🔥 THIS IS THE FIX 🔥
+  header.style.borderTopLeftRadius = "16px";
+  header.style.borderTopRightRadius = "16px";
 
   const headerLeft = document.createElement("div");
   headerLeft.style.display = "flex";
@@ -146,6 +149,7 @@
   close.textContent = "✕";
   close.style.cursor = "pointer";
   close.style.fontSize = "20px";
+  close.style.lineHeight = "1";
   close.onclick = closeChat;
 
   header.appendChild(headerLeft);
@@ -229,9 +233,6 @@
     }
   }
 
-  /* ===============================
-     CHAT LOGIC
-     =============================== */
   function addMessage(text, user) {
     const msg = document.createElement("div");
     msg.style.margin = "10px 0";
@@ -270,9 +271,6 @@
 
   send.onclick = sendMessage;
 
-  /* ===============================
-     OPEN / CLOSE
-     =============================== */
   function openChat() {
     chat.style.opacity = "1";
     chat.style.pointerEvents = "auto";
