@@ -15,6 +15,10 @@
     return window.matchMedia("(max-width: 768px)").matches;
   }
 
+  function supportsHover() {
+    return window.matchMedia("(hover: hover)").matches;
+  }
+
   function el(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
     Object.entries(attrs).forEach(([k, v]) => {
@@ -32,10 +36,6 @@
       : fallback;
   }
 
-  function supportsHover() {
-    return window.matchMedia("(hover: hover)").matches;
-  }
-
   /* =========================================================
      LOAD CLIENT DATA FIRST
   ========================================================= */
@@ -49,37 +49,36 @@
     .catch(() => {});
 
   /* =========================================================
-     INIT (NO DOM FLASH)
+     INIT
   ========================================================= */
 
   function initWidget() {
     const brand = safeColor(clientData.primary_color, "#2563eb");
 
-    /* ---- ROOT CONTAINER (HIDDEN) ---- */
+    /* ---- ROOT (HIDDEN UNTIL READY) ---- */
 
     const root = el("div", {
       style: {
         position: "fixed",
         inset: "0",
         zIndex: 9999,
-        pointerEvents: "none",
         visibility: "hidden",
         opacity: "0",
-        transition: "opacity 0.2s ease"
+        transition: "opacity 0.2s ease",
+        pointerEvents: "none"
       }
     });
-
     document.body.appendChild(root);
 
-    /* ---- BUBBLE ---- */
+    /* ---- CHAT BUBBLE ---- */
 
     const bubble = el("div", {
       style: {
         position: "fixed",
         bottom: "20px",
         right: "20px",
-        width: isMobile() ? "64px" : "56px",
-        height: isMobile() ? "64px" : "56px",
+        width: isMobile() ? "72px" : "56px",
+        height: isMobile() ? "72px" : "56px",
         borderRadius: "50%",
         background: brand,
         color: "#fff",
@@ -93,7 +92,6 @@
       },
       onclick: toggleChat
     });
-
     bubble.textContent = "💬";
 
     if (supportsHover()) {
@@ -116,7 +114,7 @@
         bottom: isMobile() ? "0" : "90px",
         right: isMobile() ? "0" : "20px",
         width: isMobile() ? "100vw" : "360px",
-        height: isMobile() ? "100vh" : "520px",
+        height: isMobile() ? "100dvh" : "520px",
         background: "#fff",
         borderRadius: isMobile() ? "0" : "16px",
         boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
@@ -149,19 +147,29 @@
     });
 
     if (clientData.logo_url) {
-      headerLeft.appendChild(
+      const logoWrap = el("div", {
+        style: {
+          width: "36px",
+          height: "36px",
+          borderRadius: "6px",
+          overflow: "hidden",
+          background: "#fff",
+          flexShrink: "0"
+        }
+      });
+
+      logoWrap.appendChild(
         el("img", {
           src: clientData.logo_url,
           style: {
-            width: "32px",
-            height: "32px",
-            borderRadius: "6px",
-            objectFit: "contain",
-            background: "#fff",
-            padding: "2px"
+            width: "100%",
+            height: "100%",
+            objectFit: "cover" // <-- FIX #2
           }
         })
       );
+
+      headerLeft.appendChild(logoWrap);
     }
 
     headerLeft.appendChild(
@@ -174,22 +182,10 @@
       style: {
         fontSize: "22px",
         cursor: "pointer",
-        lineHeight: "1",
-        transition: "transform 0.15s ease, opacity 0.15s ease"
+        lineHeight: "1"
       },
       onclick: toggleChat
     }, [document.createTextNode("×")]);
-
-    if (supportsHover()) {
-      closeBtn.onmouseenter = () => {
-        closeBtn.style.transform = "scale(1.2)";
-        closeBtn.style.opacity = "0.85";
-      };
-      closeBtn.onmouseleave = () => {
-        closeBtn.style.transform = "none";
-        closeBtn.style.opacity = "1";
-      };
-    }
 
     header.appendChild(headerLeft);
     header.appendChild(closeBtn);
@@ -199,10 +195,10 @@
     const messages = el("div", {
       style: {
         flex: "1",
-        padding: "12px",
+        padding: isMobile() ? "16px" : "12px",
         overflowY: "auto",
         background: "#f8fafc",
-        fontSize: "14px"
+        fontSize: isMobile() ? "16px" : "14px"
       }
     });
 
@@ -227,19 +223,17 @@
         border: "1px solid #d1d5db",
         padding: "10px",
         fontSize: "14px",
-        outline: "none",
-        transition: "border-color 0.15s ease, box-shadow 0.15s ease"
+        outline: "none"
       }
     });
 
-    input.onfocus = () => {
-      input.style.borderColor = brand;
-      input.style.boxShadow = `0 0 0 2px ${brand}33`;
-    };
-    input.onblur = () => {
-      input.style.borderColor = "#d1d5db";
-      input.style.boxShadow = "none";
-    };
+    // FIX #3: Enter to send, Shift+Enter for newline
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
 
     const sendBtn = el("button", {
       style: {
@@ -249,22 +243,10 @@
         borderRadius: "12px",
         padding: "0 16px",
         cursor: "pointer",
-        fontSize: "14px",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease"
+        fontSize: "14px"
       },
       onclick: sendMessage
     }, [document.createTextNode("Send")]);
-
-    if (supportsHover()) {
-      sendBtn.onmouseenter = () => {
-        sendBtn.style.transform = "translateY(-1px)";
-        sendBtn.style.boxShadow = "0 6px 16px rgba(0,0,0,0.25)";
-      };
-      sendBtn.onmouseleave = () => {
-        sendBtn.style.transform = "none";
-        sendBtn.style.boxShadow = "none";
-      };
-    }
 
     inputWrap.appendChild(input);
     inputWrap.appendChild(sendBtn);
@@ -276,14 +258,14 @@
     root.appendChild(bubble);
     root.appendChild(chat);
 
-    /* ---- INITIAL BOT MESSAGE ---- */
+    /* ---- DEFAULT MESSAGE ---- */
 
     addMessage(
       `Hi! I’m the virtual assistant for ${clientData.company_name}. How can I help you today?`,
       "bot"
     );
 
-    /* ---- REVEAL AT ONCE ---- */
+    /* ---- REVEAL ---- */
 
     requestAnimationFrame(() => {
       root.style.visibility = "visible";
@@ -303,9 +285,9 @@
     function addMessage(text, who) {
       const msg = el("div", {
         style: {
-          marginBottom: "8px",
+          marginBottom: "10px",
           maxWidth: "85%",
-          padding: "10px 12px",
+          padding: "12px 14px",
           borderRadius: "12px",
           background: who === "user" ? brand : "#e5e7eb",
           color: who === "user" ? "#fff" : "#000",
@@ -338,4 +320,5 @@
     }
   }
 })();
+
 
