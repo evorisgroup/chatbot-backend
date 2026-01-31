@@ -5,19 +5,67 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ---------- Business hours helper ----------
-function isBusinessOpen(businessHours) {
-  if (businessHours !== "weekday_9_5") return true;
+/* ===============================
+   AVAILABILITY HELPERS
+   =============================== */
 
-  const now = new Date();
-  const day = now.getDay(); // 0 = Sunday
-  const hour = now.getHours();
-
-  const isWeekday = day >= 1 && day <= 5;
-  const isWorkingHour = hour >= 9 && hour < 17;
-
-  return isWeekday && isWorkingHour;
+function todayISO() {
+  return new Date().toISOString().split("T")[0];
 }
+
+function getTodayName() {
+  return [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday"
+  ][new Date().getDay()];
+}
+
+function isHoliday(client) {
+  const today = todayISO();
+  const rules = client.holiday_rules;
+
+  if (!rules) return false;
+
+  if (rules.type === "us_federal") {
+    // Conservative: handled externally later
+    // For now, rely on explicit dates only
+    return Array.isArray(rules.dates) && rules.dates.includes(today);
+  }
+
+  if (rules.type === "custom") {
+    return Array.isArray(rules.dates) && rules.dates.includes(today);
+  }
+
+  return false;
+}
+
+function isOpenNow(client) {
+  if (!client.weekly_hours) return true;
+  if (isHoliday(client)) return false;
+
+  const today = getTodayName();
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const ranges = client.weekly_hours[today] || [];
+
+  return ranges.some(([start, end]) => {
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    return currentMinutes >= startMin && currentMinutes < endMin;
+  });
+}
+
+/* ===============================
+   HANDLER
+   =============================== */
 
 export default async function handler(req, res) {
   try {
@@ -42,45 +90,23 @@ export default async function handler(req, res) {
       .single();
 
     if (!client) {
-      return res.json({
-        reply: "I couldn’t load company information right now.",
-      });
+      return res.json({ reply: "Company data is unavailable." });
     }
 
-    const openNow = isBusinessOpen(client.business_hours);
+    const openNow = isOpenNow(client);
 
-    const phoneLine = client.phone_number
-      ? `Phone number: ${client.phone_number}`
-      : "No phone number available.";
+    const context = `
+Company: ${client.company_name}
+Description: ${client.company_info}
+Phone: ${client.phone_number || "Not available"}
 
-    const hoursLine = client.business_hours === "weekday_9_5"
-      ? "Business hours: Monday to Friday, 9:00 AM to 5:00 PM."
-      : "Business hours: Not specified.";
+Status:
+The business is currently ${openNow ? "OPEN" : "CLOSED"}.
 
-    const availabilityLine = openNow
-      ? "The business is currently open."
-      : "The business is currently closed.";
-
-    const companyContext = `
-Company name: ${client.company_name}
-
-Description:
-${client.company_info}
-
-Locations:
-${client.locations.join(", ")}
-
-${phoneLine}
-${hoursLine}
-${availabilityLine}
-
-Important rules:
+Rules:
 - Appointments are handled by phone only.
-- Only suggest calling if the business is currently open.
-- If closed, tell the user when they can call instead.
-
-FAQs:
-${client.faqs.map(f => `Q: ${f.q} A: ${f.a}`).join(" | ")}
+- Suggest calling ONLY if the business is open.
+- If closed, explain hours instead.
 `;
 
     const completion = await openai.chat.completions.create({
@@ -90,39 +116,32 @@ ${client.faqs.map(f => `Q: ${f.q} A: ${f.a}`).join(" | ")}
         {
           role: "system",
           content: `
-You are a professional customer-facing assistant.
+You are a professional assistant.
 
-STRICT RULES:
-- Maximum 3 sentences.
-- Maximum 60 words.
-- Be concise and confident.
-- Do NOT mention being an AI.
-- Do NOT invent information.
+Constraints:
+- Max 3 sentences
+- Max 60 words
+- No AI mentions
+- No speculation
 
-CALLING RULES:
-- Appointments are handled by phone only.
-- Suggest calling ONLY if the business is currently open.
-- If closed, explain hours and suggest calling during open times.
-- Include the phone number when recommending a call.
-
-If information is unavailable, say so plainly.
-          `,
+Behavior:
+- If open, recommend calling when appropriate.
+- If closed, say they are closed and mention hours.
+          `
         },
-        { role: "system", content: companyContext },
-        { role: "user", content: message },
-      ],
+        { role: "system", content: context },
+        { role: "user", content: message }
+      ]
     });
 
-    const reply =
-      completion.choices?.[0]?.message?.content ||
-      "Could you clarify what you’re looking for?";
-
-    return res.json({ reply });
+    return res.json({
+      reply:
+        completion.choices[0]?.message?.content ||
+        "Could you clarify what you’re looking for?"
+    });
   } catch (err) {
-    console.error("Chat error:", err);
-    return res.status(500).json({
-      reply: "There was an error generating a response.",
-    });
+    console.error(err);
+    return res.status(500).json({ reply: "Server error." });
   }
 }
 
