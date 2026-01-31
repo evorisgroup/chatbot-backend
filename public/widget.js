@@ -8,16 +8,38 @@
   let chatOpen = false;
 
   /* =========================================================
-     HELPERS
+     ROBUST MOBILE DETECTION (AS BEFORE)
   ========================================================= */
 
+  function isTouchDevice() {
+    return (
+      "ontouchstart" in window ||
+      navigator.maxTouchPoints > 0 ||
+      navigator.msMaxTouchPoints > 0
+    );
+  }
+
+  function isSmallViewport() {
+    return Math.min(window.innerWidth, window.innerHeight) < 768;
+  }
+
   function isMobile() {
-    return window.matchMedia("(max-width: 768px)").matches;
+    // This is the key: capability + viewport, not just width
+    return isTouchDevice() && isSmallViewport();
+  }
+
+  function safeMobileHeight() {
+    // This was critical to avoid header being cut off
+    return window.innerHeight;
   }
 
   function supportsHover() {
     return window.matchMedia("(hover: hover)").matches;
   }
+
+  /* =========================================================
+     DOM HELPERS
+  ========================================================= */
 
   function el(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
@@ -37,7 +59,7 @@
   }
 
   /* =========================================================
-     LOAD CLIENT DATA FIRST
+     LOAD CLIENT DATA
   ========================================================= */
 
   fetch(`${API_BASE}/clientdata?client_id=${CLIENT_ID}`)
@@ -54,8 +76,9 @@
 
   function initWidget() {
     const brand = safeColor(clientData.primary_color, "#2563eb");
+    const mobile = isMobile();
 
-    /* ---- ROOT (HIDDEN UNTIL READY) ---- */
+    /* ---- ROOT (NO FLASH) ---- */
 
     const root = el("div", {
       style: {
@@ -70,15 +93,15 @@
     });
     document.body.appendChild(root);
 
-    /* ---- CHAT BUBBLE ---- */
+    /* ---- BUBBLE ---- */
 
     const bubble = el("div", {
       style: {
         position: "fixed",
         bottom: "20px",
         right: "20px",
-        width: isMobile() ? "72px" : "56px",
-        height: isMobile() ? "72px" : "56px",
+        width: mobile ? "72px" : "56px",
+        height: mobile ? "72px" : "56px",
         borderRadius: "50%",
         background: brand,
         color: "#fff",
@@ -106,17 +129,18 @@
       };
     }
 
-    /* ---- CHAT WINDOW ---- */
+    /* ---- CHAT WINDOW (RESTORED MOBILE LOGIC) ---- */
 
     const chat = el("div", {
       style: {
         position: "fixed",
-        bottom: isMobile() ? "0" : "90px",
-        right: isMobile() ? "0" : "20px",
-        width: isMobile() ? "100vw" : "360px",
-        height: isMobile() ? "100dvh" : "520px",
+        bottom: mobile ? "8px" : "90px",
+        right: mobile ? "8px" : "20px",
+        left: mobile ? "8px" : "auto",
+        width: mobile ? "auto" : "360px",
+        height: mobile ? `${safeMobileHeight() - 16}px` : "520px",
         background: "#fff",
-        borderRadius: isMobile() ? "0" : "16px",
+        borderRadius: "16px",
         boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
         display: "none",
         flexDirection: "column",
@@ -134,7 +158,8 @@
         padding: "14px 16px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between"
+        justifyContent: "space-between",
+        flexShrink: "0"
       }
     });
 
@@ -164,7 +189,7 @@
           style: {
             width: "100%",
             height: "100%",
-            objectFit: "cover" // <-- FIX #2
+            objectFit: "cover"
           }
         })
       );
@@ -195,10 +220,10 @@
     const messages = el("div", {
       style: {
         flex: "1",
-        padding: isMobile() ? "16px" : "12px",
+        padding: mobile ? "16px" : "12px",
         overflowY: "auto",
         background: "#f8fafc",
-        fontSize: isMobile() ? "16px" : "14px"
+        fontSize: mobile ? "16px" : "14px"
       }
     });
 
@@ -209,7 +234,8 @@
         padding: "10px",
         borderTop: "1px solid #e5e7eb",
         display: "flex",
-        gap: "8px"
+        gap: "8px",
+        flexShrink: "0"
       }
     });
 
@@ -227,7 +253,6 @@
       }
     });
 
-    // FIX #3: Enter to send, Shift+Enter for newline
     input.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
