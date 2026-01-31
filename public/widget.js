@@ -7,8 +7,13 @@
   let typingInterval = null;
 
   function isMobile() {
-    return Math.min(window.innerWidth, window.innerHeight) <= 768;
-  }
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia("(pointer: coarse)").matches
+  );
+}
+
 
   // ---------- Fetch client data ----------
   async function loadClientData() {
