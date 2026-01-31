@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat Widget Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    p {
+      max-width: 600px;
+      margin: 0 auto 10px auto;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Chat Widget Local Test</h1>
+<p>This page tests the dynamic AI chat widget fetching client data from your Vercel backend.</p>
+
+<!-- Set CLIENT_ID here for testing -->
+<script>
+  window.CLIENT_ID = "acme123"; // Must match an entry in /api/clientdata.js
+</script>
+
+<!-- Include your widget.js -->
+<script src="widget.js"></script>
+
+</body>
+</html>

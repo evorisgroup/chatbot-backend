@@ -1,43 +1,56 @@
-export default function handler(req, res) {
-  // === CORS SETTINGS FOR LOCAL TESTING ===
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+import { createClient } from "@supabase/supabase-js";
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+// Initialize Supabase client with env variables
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
+// In-memory cache
+let cache = {};
+let cacheTimestamp = {};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+export default async function handler(req, res) {
   const clientId = req.query.id;
 
-  // === CLIENT DATA ===
-  const clients = {
-    acme123: {
-      companyName: "Acme Corp",
-      logoURL: "/logos/acme123.png",  // logo stored in public/logos/
-      primaryColor: "#6C3BAA",        // updated brand color
-      companyInfoText: `
-Products:
-- Widget A: $19.99
-- Widget B: $39.99
-Locations: New York, Boston
-Contact: support@acme.com
-FAQ: Shipping takes 3-5 business days
-`
-    },
-    test456: {
-      companyName: "Test Co",
-      logoURL: "/logos/test456.png", // example logo
-      primaryColor: "#007bff",
-      companyInfoText: "This is test company info."
-    }
-  };
-
-  const clientData = clients[clientId];
-
-  if (!clientData) {
-    return res.status(404).json({ error: "Client not found" });
+  if (!clientId) {
+    return res.status(400).json({ error: "Missing client_id in query" });
   }
 
-  res.status(200).json(clientData);
+  const now = Date.now();
+
+  // Serve from cache if still valid
+  if (cache[clientId] && now - (cacheTimestamp[clientId] || 0) < CACHE_DURATION) {
+    return res.status(200).json(cache[clientId]);
+  }
+
+  try {
+    // Fetch client data from Supabase
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("client_id", clientId)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+
+    // Update cache
+    cache[clientId] = data;
+    cacheTimestamp[clientId] = now;
+
+    // CORS headers so any site can fetch this
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") return res.status(200).end();
+
+    res.status(200).json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 }
+
