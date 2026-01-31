@@ -1,203 +1,160 @@
-(function () {
-  // ---------------------------
-  // CONFIG
-  // ---------------------------
-  const CLIENT_ID = "nhh"; // change when testing other clients
+// public/widget.js
+(() => {
+  const CLIENT_ID = window.CLIENT_ID;
 
-  // Create floating chat icon
-  const chatButton = document.createElement("div");
-  chatButton.id = "chatbot-button";
-  chatButton.innerHTML = "💬";
-  chatButton.style.position = "fixed";
-  chatButton.style.bottom = "20px";
-  chatButton.style.right = "20px";
-  chatButton.style.width = "60px";
-  chatButton.style.height = "60px";
-  chatButton.style.background = "#6C3BAA";
-  chatButton.style.color = "white";
-  chatButton.style.borderRadius = "50%";
-  chatButton.style.display = "flex";
-  chatButton.style.alignItems = "center";
-  chatButton.style.justifyContent = "center";
-  chatButton.style.cursor = "pointer";
-  chatButton.style.zIndex = "9999";
-  chatButton.style.fontSize = "30px";
-  document.body.appendChild(chatButton);
+  // Create chat window elements
+  const messengerIcon = document.createElement('div');
+  messengerIcon.id = 'chat-messenger-icon';
+  messengerIcon.style.position = 'fixed';
+  messengerIcon.style.bottom = '20px';
+  messengerIcon.style.right = '20px';
+  messengerIcon.style.width = '60px';
+  messengerIcon.style.height = '60px';
+  messengerIcon.style.borderRadius = '50%';
+  messengerIcon.style.backgroundColor = '#6C3BAA'; // fallback
+  messengerIcon.style.cursor = 'pointer';
+  messengerIcon.style.display = 'flex';
+  messengerIcon.style.alignItems = 'center';
+  messengerIcon.style.justifyContent = 'center';
+  messengerIcon.style.color = '#fff';
+  messengerIcon.style.fontWeight = 'bold';
+  messengerIcon.style.fontSize = '24px';
+  messengerIcon.style.zIndex = '9999';
+  messengerIcon.textContent = '💬';
+  document.body.appendChild(messengerIcon);
 
-  // Create chat window container
-  const chatWindow = document.createElement("div");
-  chatWindow.id = "chatbot-window";
-  chatWindow.style.position = "fixed";
-  chatWindow.style.bottom = "90px";
-  chatWindow.style.right = "20px";
-  chatWindow.style.width = "380px";
-  chatWindow.style.height = "520px";
-  chatWindow.style.background = "white";
-  chatWindow.style.borderRadius = "16px";
-  chatWindow.style.boxShadow = "0 4px 20px rgba(0,0,0,0.15)";
-  chatWindow.style.display = "none";
-  chatWindow.style.flexDirection = "column";
-  chatWindow.style.overflow = "hidden";
-  chatWindow.style.zIndex = "9999";
+  const chatWindow = document.createElement('div');
+  chatWindow.id = 'chat-window';
+  chatWindow.style.position = 'fixed';
+  chatWindow.style.bottom = '90px';
+  chatWindow.style.right = '20px';
+  chatWindow.style.width = '300px';
+  chatWindow.style.maxHeight = '400px';
+  chatWindow.style.backgroundColor = '#fff';
+  chatWindow.style.border = '1px solid #ccc';
+  chatWindow.style.borderRadius = '8px';
+  chatWindow.style.display = 'none';
+  chatWindow.style.flexDirection = 'column';
+  chatWindow.style.overflow = 'hidden';
+  chatWindow.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+  chatWindow.style.zIndex = '9999';
   document.body.appendChild(chatWindow);
 
-  // Inner structure
-  chatWindow.innerHTML = `
-      <div id="chatbot-header" style="
-          height: 60px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          font-weight: bold;
-          color: white;
-          position: relative;
-      ">
-          <img id="chatbot-logo" style="
-              position: absolute;
-              left: 15px;
-              width: 36px;
-              height: 36px;
-              border-radius: 6px;
-              object-fit: cover;
-          ">
-          <span id="chatbot-title"></span>
-      </div>
+  const chatHeader = document.createElement('div');
+  chatHeader.id = 'chat-header';
+  chatHeader.style.backgroundColor = '#6C3BAA';
+  chatHeader.style.color = '#fff';
+  chatHeader.style.padding = '10px';
+  chatHeader.style.fontWeight = 'bold';
+  chatHeader.style.display = 'flex';
+  chatHeader.style.alignItems = 'center';
+  chatHeader.style.gap = '10px';
+  chatWindow.appendChild(chatHeader);
 
-      <div id="chatbot-messages" style="
-          flex: 1;
-          overflow-y: auto;
-          padding: 12px;
-          font-family: Arial, sans-serif;
-          font-size: 15px;
-      "></div>
+  const logoImg = document.createElement('img');
+  logoImg.id = 'chat-logo';
+  logoImg.style.width = '30px';
+  logoImg.style.height = '30px';
+  logoImg.style.objectFit = 'contain';
+  chatHeader.appendChild(logoImg);
 
-      <div style="
-          display: flex;
-          padding: 10px;
-          border-top: 1px solid #ddd;
-      ">
-          <textarea id="chatbot-input" placeholder="Type a message…" style="
-              flex: 1;
-              resize: none;
-              padding: 8px;
-              height: 35px;
-              border-radius: 8px;
-              border: 1px solid #ccc;
-              font-size: 14px;
-              font-family: Arial, sans-serif;
-              overflow-y: hidden;
-          "></textarea>
-          <button id="chatbot-send" style="
-              margin-left: 8px;
-              background: #6C3BAA;
-              color: white;
-              border: none;
-              padding: 0 16px;
-              border-radius: 8px;
-              cursor: pointer;
-              font-weight: bold;
-          ">Send</button>
-      </div>
-  `;
+  const titleSpan = document.createElement('span');
+  titleSpan.textContent = 'Chat';
+  chatHeader.appendChild(titleSpan);
 
-  // DOM references
-  const header = document.getElementById("chatbot-header");
-  const logoImg = document.getElementById("chatbot-logo");
-  const titleSpan = document.getElementById("chatbot-title");
-  const msgContainer = document.getElementById("chatbot-messages");
-  const input = document.getElementById("chatbot-input");
-  const sendBtn = document.getElementById("chatbot-send");
+  const chatBody = document.createElement('div');
+  chatBody.id = 'chat-body';
+  chatBody.style.flex = '1';
+  chatBody.style.padding = '10px';
+  chatBody.style.overflowY = 'auto';
+  chatWindow.appendChild(chatBody);
 
-  let clientData = null;
+  const chatInputContainer = document.createElement('div');
+  chatInputContainer.style.display = 'flex';
+  chatInputContainer.style.borderTop = '1px solid #ccc';
+  chatWindow.appendChild(chatInputContainer);
 
-  // ---------------------------
-  // FETCH CLIENT DATA FROM YOUR SERVER
-  // ---------------------------
+  const chatInput = document.createElement('textarea');
+  chatInput.style.flex = '1';
+  chatInput.style.resize = 'none';
+  chatInput.style.padding = '10px';
+  chatInput.style.border = 'none';
+  chatInput.style.outline = 'none';
+  chatInput.rows = 1;
+  chatInputContainer.appendChild(chatInput);
+
+  const sendButton = document.createElement('button');
+  sendButton.textContent = 'Send';
+  sendButton.style.padding = '0 15px';
+  sendButton.style.border = 'none';
+  sendButton.style.backgroundColor = '#6C3BAA';
+  sendButton.style.color = '#fff';
+  sendButton.style.cursor = 'pointer';
+  chatInputContainer.appendChild(sendButton);
+
+  messengerIcon.addEventListener('click', () => {
+    chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  // Fetch client data from secure endpoint
+  let clientData = {};
   async function loadClientData() {
     try {
-      const response = await fetch(`/api/clientdata?client_id=${CLIENT_ID}`);
-      clientData = await response.json();
-
-      // Apply visual theming
-      header.style.background = clientData.primaryColor || "#6C3BAA";
-      titleSpan.textContent = clientData.name || "Company";
-
-      if (clientData.logo_url) {
-        logoImg.src = clientData.logo_url;
-      }
+      const res = await fetch(`/api/clientdata?client_id=${CLIENT_ID}`);
+      clientData = await res.json();
+      // Apply client info
+      chatHeader.style.backgroundColor = clientData.primaryColor || '#6C3BAA';
+      titleSpan.textContent = clientData.name || 'Chat';
+      logoImg.src = clientData.logo_url || '';
+      sendButton.style.backgroundColor = clientData.primaryColor || '#6C3BAA';
+      messengerIcon.style.backgroundColor = clientData.primaryColor || '#6C3BAA';
     } catch (err) {
-      console.error("Failed to load client data:", err);
+      console.error('Failed to load client data', err);
     }
   }
 
   loadClientData();
 
-  // ---------------------------
-  // CHAT WINDOW TOGGLE
-  // ---------------------------
-  chatButton.addEventListener("click", () => {
-    chatWindow.style.display =
-      chatWindow.style.display === "none" ? "flex" : "none";
-  });
-
-  // ---------------------------
-  // SEND MESSAGE
-  // ---------------------------
-  function addMessage(text, sender) {
-    const div = document.createElement("div");
-    div.style.margin = "10px 0";
-    div.style.padding = "8px 10px";
-    div.style.borderRadius = "8px";
-    div.style.maxWidth = "80%";
-
-    if (sender === "user") {
-      div.style.background = "#6C3BAA";
-      div.style.color = "white";
-      div.style.marginLeft = "auto";
-    } else {
-      div.style.background = "#f1f1f1";
-      div.style.color = "#222";
-    }
-
-    div.textContent = text;
-    msgContainer.appendChild(div);
-    msgContainer.scrollTop = msgContainer.scrollHeight;
+  function addMessage(text, isBot = true) {
+    const msg = document.createElement('div');
+    msg.textContent = text;
+    msg.style.marginBottom = '8px';
+    msg.style.padding = '6px 10px';
+    msg.style.borderRadius = '4px';
+    msg.style.maxWidth = '80%';
+    msg.style.alignSelf = isBot ? 'flex-start' : 'flex-end';
+    msg.style.backgroundColor = isBot ? '#f1f0f0' : '#DCF8C6';
+    chatBody.appendChild(msg);
+    chatBody.scrollTop = chatBody.scrollHeight;
   }
 
   async function sendMessage() {
-    const text = input.value.trim();
-    if (!text) return;
-
-    addMessage(text, "user");
-    input.value = "";
-    input.style.height = "35px";
-
-    // Fetch bot response
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: CLIENT_ID, message: text }),
-    });
-
-    const data = await response.json();
-    addMessage(data.reply || "(No response)", "bot");
+    const message = chatInput.value.trim();
+    if (!message) return;
+    addMessage(message, false);
+    chatInput.value = '';
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, client_id: CLIENT_ID }),
+      });
+      const data = await res.json();
+      addMessage(data.reply || "Sorry, I couldn't understand that.");
+    } catch (err) {
+      addMessage('Error sending message.');
+      console.error(err);
+    }
   }
 
-  sendBtn.addEventListener("click", sendMessage);
-
-  input.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
+  sendButton.addEventListener('click', sendMessage);
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   });
-
-  // Auto-resize textarea
-  input.addEventListener("input", () => {
-    input.style.height = "auto";
-    input.style.height = input.scrollHeight + "px";
-  });
 })();
+
 
 
