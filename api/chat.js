@@ -17,7 +17,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ reply: "Invalid request." });
     }
 
-    // --- Supabase ---
+    // ---------- Supabase ----------
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_KEY
@@ -35,11 +35,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // --- Build company context ---
+    // ---------- Company Context ----------
     const companyContext = `
-Company Name: ${client.company_name}
+Company name:
+${client.company_name}
 
-Company Description:
+Company description:
 ${client.company_info}
 
 Products:
@@ -52,17 +53,34 @@ FAQs:
 ${client.faqs.map(f => `Q: ${f.q}\nA: ${f.a}`).join("\n\n")}
 `;
 
-    // --- AI Prompt ---
+    // ---------- AI Completion ----------
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
+      temperature: 0.3,
       messages: [
         {
           role: "system",
           content: `
-You are a customer support chatbot for the company below.
-Only answer using the provided company information.
-If the question cannot be answered, politely say you don't have that information.
-Be clear, concise, and professional.
+You are a professional customer-facing assistant for the company described below.
+
+Your job:
+- Answer questions accurately using ONLY the provided company information.
+- Sound confident, clear, and professional.
+- Keep responses concise (2–4 sentences unless more detail is requested).
+- Do NOT mention being an AI.
+- Do NOT speculate or guess.
+
+Conversation style rules:
+- Be helpful and direct.
+- When appropriate, suggest a reasonable next step (e.g. learning more, scheduling, contacting the company).
+- Do NOT be pushy or salesy.
+- If the information is not available, say so plainly and offer an alternative.
+
+Never invent:
+- Prices
+- Policies
+- Locations
+- Capabilities
           `,
         },
         {
@@ -74,7 +92,6 @@ Be clear, concise, and professional.
           content: message,
         },
       ],
-      temperature: 0.3,
     });
 
     const reply =
@@ -89,5 +106,6 @@ Be clear, concise, and professional.
     });
   }
 }
+
 
 
