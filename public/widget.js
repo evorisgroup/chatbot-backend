@@ -1,19 +1,16 @@
 (() => {
   const CLIENT_ID = window.CLIENT_ID;
-  if (!CLIENT_ID) {
-    console.error("Missing CLIENT_ID");
-    return;
-  }
+  if (!CLIENT_ID) return;
 
   let clientData = null;
   let chatOpen = false;
   let typingInterval = null;
 
   function isMobile() {
-    return window.innerWidth <= 768;
+    return Math.min(window.innerWidth, window.innerHeight) <= 768;
   }
 
-  // ---------------- Fetch client data ----------------
+  // ---------- Fetch client data ----------
   async function loadClientData() {
     const res = await fetch(
       `https://chatbot-backend-tawny-alpha.vercel.app/api/clientdata?client_id=${CLIENT_ID}`
@@ -22,82 +19,82 @@
     applyBranding();
   }
 
-  // ---------------- Container ----------------
-  const container = document.createElement("div");
-  container.style.position = "fixed";
-  container.style.bottom = "20px";
-  container.style.right = "20px";
-  container.style.zIndex = "999999";
-  document.body.appendChild(container);
-
-  // ---------------- Bubble ----------------
+  // ---------- Bubble ----------
   const bubble = document.createElement("div");
+  bubble.innerHTML = "💬";
+  bubble.style.position = "fixed";
+  bubble.style.bottom = "20px";
+  bubble.style.right = "20px";
+  bubble.style.borderRadius = "50%";
   bubble.style.display = "flex";
   bubble.style.alignItems = "center";
   bubble.style.justifyContent = "center";
-  bubble.style.borderRadius = "50%";
   bubble.style.cursor = "pointer";
-  bubble.style.boxShadow = "0 6px 16px rgba(0,0,0,0.3)";
+  bubble.style.boxShadow = "0 6px 20px rgba(0,0,0,0.35)";
+  bubble.style.zIndex = "999999";
   bubble.style.transition = "transform 0.2s ease";
 
-  bubble.innerHTML = "💬";
-
-  if (isMobile()) {
-    bubble.style.width = "80px";
-    bubble.style.height = "80px";
-    bubble.style.fontSize = "32px";
-  } else {
-    bubble.style.width = "72px";
-    bubble.style.height = "72px";
-    bubble.style.fontSize = "28px";
+  function sizeBubble() {
+    if (isMobile()) {
+      bubble.style.width = "84px";
+      bubble.style.height = "84px";
+      bubble.style.fontSize = "34px";
+    } else {
+      bubble.style.width = "72px";
+      bubble.style.height = "72px";
+      bubble.style.fontSize = "28px";
+    }
   }
 
+  sizeBubble();
   bubble.onmouseenter = () => (bubble.style.transform = "scale(1.08)");
   bubble.onmouseleave = () => (bubble.style.transform = "scale(1)");
+  document.body.appendChild(bubble);
 
-  container.appendChild(bubble);
-
-  // ---------------- Chat Window ----------------
+  // ---------- Chat Window ----------
   const chat = document.createElement("div");
   chat.style.position = "fixed";
   chat.style.background = "#fff";
   chat.style.display = "flex";
   chat.style.flexDirection = "column";
-  chat.style.boxShadow = "0 12px 30px rgba(0,0,0,0.3)";
-  chat.style.transition = "all 0.25s ease";
+  chat.style.zIndex = "999998";
+  chat.style.transition = "transform 0.25s ease, opacity 0.25s ease";
   chat.style.opacity = "0";
   chat.style.pointerEvents = "none";
-  chat.style.transform = "translateY(30px)";
+  chat.style.transform = "translateY(40px)";
 
-  if (isMobile()) {
-    chat.style.width = "calc(100vw - 20px)";
-    chat.style.height = "80vh";
-    chat.style.right = "10px";
-    chat.style.bottom = "10px";
-    chat.style.borderRadius = "16px";
-  } else {
-    chat.style.width = "360px";
-    chat.style.height = "500px";
-    chat.style.right = "20px";
-    chat.style.bottom = "100px";
-    chat.style.borderRadius = "14px";
+  function sizeChat() {
+    if (isMobile()) {
+      chat.style.width = "100vw";
+      chat.style.height = "100vh";
+      chat.style.bottom = "0";
+      chat.style.right = "0";
+      chat.style.borderRadius = "0";
+    } else {
+      chat.style.width = "360px";
+      chat.style.height = "500px";
+      chat.style.bottom = "110px";
+      chat.style.right = "20px";
+      chat.style.borderRadius = "14px";
+    }
   }
 
+  sizeChat();
   document.body.appendChild(chat);
 
-  // ---------------- Header ----------------
+  // ---------- Header ----------
   const header = document.createElement("div");
   header.style.display = "flex";
   header.style.alignItems = "center";
   header.style.justifyContent = "space-between";
-  header.style.padding = "12px 14px";
+  header.style.padding = "14px";
   header.style.color = "#fff";
   header.style.fontWeight = "600";
 
-  const titleWrap = document.createElement("div");
-  titleWrap.style.display = "flex";
-  titleWrap.style.alignItems = "center";
-  titleWrap.style.gap = "10px";
+  const left = document.createElement("div");
+  left.style.display = "flex";
+  left.style.alignItems = "center";
+  left.style.gap = "10px";
 
   const logo = document.createElement("img");
   logo.style.width = "28px";
@@ -108,22 +105,20 @@
   const title = document.createElement("span");
   title.textContent = "Chat";
 
-  titleWrap.appendChild(logo);
-  titleWrap.appendChild(title);
+  left.appendChild(logo);
+  left.appendChild(title);
 
-  const closeBtn = document.createElement("div");
-  closeBtn.textContent = "✕";
-  closeBtn.style.cursor = "pointer";
-  closeBtn.style.opacity = "0.85";
-  closeBtn.onmouseenter = () => (closeBtn.style.opacity = "1");
-  closeBtn.onmouseleave = () => (closeBtn.style.opacity = "0.85");
-  closeBtn.onclick = closeChat;
+  const close = document.createElement("div");
+  close.textContent = "✕";
+  close.style.cursor = "pointer";
+  close.style.fontSize = "18px";
+  close.onclick = closeChat;
 
-  header.appendChild(titleWrap);
-  header.appendChild(closeBtn);
+  header.appendChild(left);
+  header.appendChild(close);
   chat.appendChild(header);
 
-  // ---------------- Messages ----------------
+  // ---------- Messages ----------
   const messages = document.createElement("div");
   messages.style.flex = "1";
   messages.style.padding = "14px";
@@ -131,11 +126,9 @@
   messages.style.background = "#fafafa";
   chat.appendChild(messages);
 
-  // ---------------- Typing Indicator ----------------
   const typing = document.createElement("div");
   typing.style.fontSize = "13px";
   typing.style.opacity = "0.7";
-  typing.style.margin = "6px 0";
   typing.style.display = "none";
   messages.appendChild(typing);
 
@@ -153,16 +146,16 @@
     typing.style.display = "none";
   }
 
-  // ---------------- Input ----------------
+  // ---------- Input ----------
   const inputWrap = document.createElement("div");
-  inputWrap.style.padding = "12px";
+  inputWrap.style.padding = "14px";
   inputWrap.style.borderTop = "1px solid #ddd";
 
   const textarea = document.createElement("textarea");
-  textarea.placeholder = "Type a message...";
+  textarea.placeholder = "Type a message…";
   textarea.rows = 2;
   textarea.style.width = "100%";
-  textarea.style.padding = "10px";
+  textarea.style.padding = "12px";
   textarea.style.borderRadius = "8px";
   textarea.style.border = "1px solid #ccc";
   textarea.style.resize = "none";
@@ -170,22 +163,19 @@
 
   const send = document.createElement("button");
   send.textContent = "Send";
-  send.style.marginTop = "8px";
+  send.style.marginTop = "10px";
   send.style.width = "100%";
-  send.style.padding = "10px";
+  send.style.padding = "12px";
   send.style.border = "none";
   send.style.borderRadius = "8px";
   send.style.color = "#fff";
   send.style.cursor = "pointer";
-  send.style.transition = "filter 0.2s";
-  send.onmouseenter = () => (send.style.filter = "brightness(1.1)");
-  send.onmouseleave = () => (send.style.filter = "brightness(1)");
 
   inputWrap.appendChild(textarea);
   inputWrap.appendChild(send);
   chat.appendChild(inputWrap);
 
-  // ---------------- Branding ----------------
+  // ---------- Branding ----------
   function applyBranding() {
     if (!clientData) return;
     bubble.style.background = clientData.primary_color;
@@ -198,13 +188,13 @@
     }
   }
 
-  // ---------------- Chat Logic ----------------
+  // ---------- Messages ----------
   function addMessage(text, user) {
     const msg = document.createElement("div");
     msg.style.margin = "10px 0";
-    msg.style.padding = "10px 14px";
-    msg.style.borderRadius = "8px";
-    msg.style.maxWidth = "75%";
+    msg.style.padding = "12px 14px";
+    msg.style.borderRadius = "10px";
+    msg.style.maxWidth = "80%";
     msg.style.color = "#000";
     msg.style.alignSelf = user ? "flex-end" : "flex-start";
     msg.style.background = user ? "#e0e0e0" : "#fff";
@@ -237,7 +227,7 @@
 
   send.onclick = sendMessage;
 
-  // ---------------- Open / Close ----------------
+  // ---------- Open / Close ----------
   function openChat() {
     chat.style.opacity = "1";
     chat.style.pointerEvents = "auto";
@@ -248,11 +238,17 @@
   function closeChat() {
     chat.style.opacity = "0";
     chat.style.pointerEvents = "none";
-    chat.style.transform = "translateY(30px)";
+    chat.style.transform = "translateY(40px)";
     chatOpen = false;
   }
 
   bubble.onclick = () => (chatOpen ? closeChat() : openChat());
+
+  // ---------- Resize handling ----------
+  window.addEventListener("resize", () => {
+    sizeBubble();
+    sizeChat();
+  });
 
   loadClientData();
 })();
