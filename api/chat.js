@@ -6,9 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
-/* -----------------------------
-   Utility helpers
--------------------------------- */
+/* =========================================================
+   NORMALIZATION HELPERS
+   These make the bot tolerant of real-world Supabase data
+========================================================= */
 
 function normalize(text) {
   return text
@@ -19,24 +20,52 @@ function normalize(text) {
 }
 
 function isPureGreeting(message) {
-  const normalized = normalize(message);
-  return [
-    "hi",
-    "hello",
-    "hey",
-    "hey there",
-    "yo",
-    "sup"
-  ].includes(normalized);
+  const n = normalize(message);
+  return ["hi", "hello", "hey", "hey there", "yo", "sup"].includes(n);
+}
+
+/**
+ * Accepts MANY possible hour formats and returns one shape:
+ * { open: "09:00", close: "17:00", closed: false }
+ */
+function normalizeHours(raw) {
+  if (!raw) return { closed: true };
+
+  // Explicit closed
+  if (raw.closed === true) return { closed: true };
+
+  // { open, close }
+  if (raw.open && raw.close) {
+    return { open: raw.open, close: raw.close, closed: false };
+  }
+
+  // { start, end }
+  if (raw.start && raw.end) {
+    return { open: raw.start, close: raw.end, closed: false };
+  }
+
+  // ["09:00", "17:00"]
+  if (Array.isArray(raw) && raw.length === 2) {
+    return { open: raw[0], close: raw[1], closed: false };
+  }
+
+  return { closed: true };
 }
 
 function formatWeeklyHours(weeklyHours) {
-  if (!weeklyHours) return "Our business hours are not available.";
+  if (!weeklyHours) {
+    return "Our business hours are not available.";
+  }
 
   return Object.entries(weeklyHours)
-    .map(([day, hours]) => {
-      if (!hours || hours.closed) return `${day}: Closed`;
-      return `${day}: ${hours.open} – ${hours.close}`;
+    .map(([day, raw]) => {
+      const h = normalizeHours(raw);
+      const label = day.charAt(0).toUpperCase() + day.slice(1);
+
+      if (h.closed) return `${label}: Closed`;
+      if (!h.open || !h.close) return `${label}: Hours not available`;
+
+      return `${label}: ${h.open} – ${h.close}`;
     })
     .join("\n");
 }
@@ -49,14 +78,14 @@ function isOpenNow(weeklyHours) {
     .toLocaleDateString("en-US", { weekday: "long" })
     .toLowerCase();
 
-  const hours = weeklyHours[day];
-  if (!hours || hours.closed) return false;
+  const h = normalizeHours(weeklyHours[day]);
+  if (h.closed || !h.open || !h.close) return false;
 
-  const current = now.getHours() * 60 + now.getMinutes();
-  const [oh, om] = hours.open.split(":").map(Number);
-  const [ch, cm] = hours.close.split(":").map(Number);
+  const minsNow = now.getHours() * 60 + now.getMinutes();
+  const [oh, om] = h.open.split(":").map(Number);
+  const [ch, cm] = h.close.split(":").map(Number);
 
-  return current >= oh * 60 + om && current <= ch * 60 + cm;
+  return minsNow >= oh * 60 + om && minsNow <= ch * 60 + cm;
 }
 
 function nextOpenTime(weeklyHours) {
@@ -67,24 +96,24 @@ function nextOpenTime(weeklyHours) {
     "thursday","friday","saturday","sunday"
   ];
 
-  const now = new Date();
-  let index = days.indexOf(
-    now.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase()
+  const todayIndex = days.indexOf(
+    new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase()
   );
 
   for (let i = 0; i < 7; i++) {
-    const d = days[(index + i) % 7];
-    const hours = weeklyHours[d];
-    if (hours && !hours.closed) {
-      return `${d.charAt(0).toUpperCase() + d.slice(1)} at ${hours.open}`;
+    const d = days[(todayIndex + i) % 7];
+    const h = normalizeHours(weeklyHours[d]);
+    if (!h.closed && h.open) {
+      return `${d.charAt(0).toUpperCase() + d.slice(1)} at ${h.open}`;
     }
   }
+
   return null;
 }
 
-/* -----------------------------
-   Main handler
--------------------------------- */
+/* =========================================================
+   MAIN HANDLER
+========================================================= */
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -92,12 +121,12 @@ export default async function handler(req, res) {
   }
 
   const { message, client_id } = req.body;
-
   if (!message || !client_id) {
     return res.status(400).json({ error: "Missing message or client_id" });
   }
 
-  // Fetch client data
+  /* ---------------- Fetch client ---------------- */
+
   const { data: client, error } = await supabase
     .from("clients")
     .select("*")
@@ -105,117 +134,117 @@ export default async function handler(req, res) {
     .single();
 
   if (error || !client) {
-    return res.json({ reply: "Sorry, I couldn’t load company information." });
+    return res.json({
+      reply: "Sorry, I couldn’t load company information."
+    });
   }
 
-  /* -----------------------------
-     Pure greeting short-circuit
-  -------------------------------- */
+  /* ---------------- Greeting short-circuit ---------------- */
+
   if (isPureGreeting(message)) {
     return res.json({
       reply: `Hi! How can I help you today?`
     });
   }
 
-  /* -----------------------------
-     Intent classification
-  -------------------------------- */
+  /* ---------------- Intent classification ---------------- */
+
   const intent = await classifyIntent(message);
+  let reply = [];
 
-  let replyParts = [];
+  /* ---------------- Primary intent ---------------- */
 
-  /* -----------------------------
-     Primary intent routing
-  -------------------------------- */
   switch (intent.primary_intent) {
     case "GENERAL_HOURS":
-      replyParts.push(formatWeeklyHours(client.weekly_hours));
+      reply.push(formatWeeklyHours(client.weekly_hours));
       break;
 
     case "TODAY_HOURS": {
       const today = new Date()
         .toLocaleDateString("en-US", { weekday: "long" })
         .toLowerCase();
-      const hours = client.weekly_hours?.[today];
-      replyParts.push(
-        hours && !hours.closed
-          ? `Today we’re open from ${hours.open} to ${hours.close}.`
-          : `We’re closed today.`
+
+      const h = normalizeHours(client.weekly_hours?.[today]);
+      reply.push(
+        h.closed
+          ? "We’re closed today."
+          : `Today we’re open from ${h.open} to ${h.close}.`
       );
       break;
     }
 
     case "OPEN_NOW":
-      replyParts.push(
+      reply.push(
         isOpenNow(client.weekly_hours)
           ? "Yes, we’re currently open."
           : "We’re currently closed."
       );
       break;
 
-    case "NEXT_OPEN_TIME":
-      replyParts.push(
-        nextOpenTime(client.weekly_hours)
-          ? `Our next opening is ${nextOpenTime(client.weekly_hours)}.`
+    case "NEXT_OPEN_TIME": {
+      const next = nextOpenTime(client.weekly_hours);
+      reply.push(
+        next
+          ? `Our next opening is ${next}.`
           : "Our next opening time isn’t available."
       );
       break;
+    }
 
     case "SERVICES_LIST":
-      replyParts.push(
-        client.services
-          ? `We offer the following services:\n${client.services.join(", ")}`
+      reply.push(
+        Array.isArray(client.services) && client.services.length
+          ? `We offer:\n${client.services.join(", ")}`
           : "Our services information isn’t available."
       );
       break;
 
     case "PRICING_GENERAL":
-      replyParts.push(
+      reply.push(
         client.pricing_policy ||
-          "Pricing depends on the service and situation. We can provide details by phone."
+          "Pricing depends on the service and situation."
       );
       break;
 
     case "CONTACT_PHONE":
       if (!intent.constraints.avoid_phone && client.contact_phone) {
-        replyParts.push(`You can call us at ${client.contact_phone}.`);
+        reply.push(`You can call us at ${client.contact_phone}.`);
       }
       break;
 
     case "COMPANY_OVERVIEW":
-      replyParts.push(
+      reply.push(
         client.company_info ||
-          `We’re here to help with questions about ${client.company_name}.`
+          `We help customers with services provided by ${client.company_name}.`
       );
       break;
 
+    case "UNKNOWN_INTENT":
     default:
-      replyParts.push(
-        `I can help with information about our services, hours, pricing, or contact details.`
+      reply.push(
+        "I’m here to help. You can ask about our hours, services, pricing, or how to contact us."
       );
   }
 
-  /* -----------------------------
-     Secondary intent handling
-  -------------------------------- */
+  /* ---------------- Secondary intent ---------------- */
+
   if (intent.secondary_intent === "GENERAL_HOURS") {
-    replyParts.push("\nOur regular hours:\n" + formatWeeklyHours(client.weekly_hours));
+    reply.push("\nOur regular hours:\n" + formatWeeklyHours(client.weekly_hours));
   }
 
-  /* -----------------------------
-     Soft CTA (only if allowed)
-  -------------------------------- */
+  /* ---------------- Soft CTA (guarded) ---------------- */
+
   if (
     !intent.constraints.avoid_phone &&
     !intent.constraints.avoid_sales &&
     client.contact_phone &&
     ["PRICING_GENERAL", "APPOINTMENT_HOW"].includes(intent.primary_intent)
   ) {
-    replyParts.push(`\nYou can reach us at ${client.contact_phone} to get help.`);
+    reply.push(`You can reach us at ${client.contact_phone} if you’d like to talk.`);
   }
 
   return res.json({
-    reply: replyParts.join("\n")
+    reply: reply.join("\n")
   });
 }
 
