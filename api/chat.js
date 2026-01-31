@@ -17,14 +17,14 @@ const DAY_NAMES = [
 const GREETING_ONLY_REGEX =
   /^(hi|hello|hey|hey there|good morning|good afternoon|good evening)[!. ]*$/i;
 
-const CALL_INTENT_REGEX =
-  /(call|phone|appointment|book|schedule|pricing|price|cost|order|quote)/i;
-
 const AVAILABILITY_REGEX =
-  /(are you open|open today|open now|business hours|hours today|hours|availability|when are you open)/i;
+  /(are you open|open today|open now|hours|business hours|availability)/i;
 
 const NEXT_OPEN_REGEX =
-  /(when do you open next|next opening|what time do you open next|when should i call|when do you open)/i;
+  /(when do you open next|next opening|what time do you open next|when should i call)/i;
+
+const CALL_INTENT_REGEX =
+  /(call|phone|appointment|book|schedule|pricing|price|cost|quote)/i;
 
 /* ===============================
    TIME HELPERS
@@ -43,7 +43,7 @@ function formatTime(hm) {
 }
 
 function isOpenNow(client) {
-  if (!client.weekly_hours) return true;
+  if (!client.weekly_hours) return false;
 
   const todayISO = new Date().toISOString().split("T")[0];
   if (client.holiday_rules?.dates?.includes(todayISO)) return false;
@@ -60,7 +60,6 @@ function isOpenNow(client) {
 
 function getHoursToday(client) {
   if (!client.weekly_hours) return null;
-
   const dayKey = DAY_NAMES[new Date().getDay()].toLowerCase();
   const ranges = client.weekly_hours[dayKey] || [];
   if (!ranges.length) return null;
@@ -94,7 +93,6 @@ function getNextOpenTime(client) {
       }
     }
   }
-
   return null;
 }
 
@@ -109,10 +107,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ reply: "Invalid request." });
     }
 
-    const trimmed = message.trim();
+    const text = message.trim();
 
-    // Greeting-only
-    if (GREETING_ONLY_REGEX.test(trimmed)) {
+    if (GREETING_ONLY_REGEX.test(text)) {
       return res.json({ reply: "Hi! How can I help you today?" });
     }
 
@@ -136,11 +133,10 @@ export default async function handler(req, res) {
     const nextOpen = getNextOpenTime(client);
 
     /* ===============================
-       HARD BUSINESS ANSWERS
+       HARD ANSWERS — NO AI
        =============================== */
 
-    // "What time do you open next"
-    if (NEXT_OPEN_REGEX.test(trimmed)) {
+    if (NEXT_OPEN_REGEX.test(text)) {
       if (openNow && hoursToday) {
         return res.json({
           reply: `We’re already open today. Our hours today are ${hoursToday}.`
@@ -152,12 +148,11 @@ export default async function handler(req, res) {
         });
       }
       return res.json({
-        reply: "Our opening hours vary by day. Let me know how else I can help."
+        reply: "Our hours vary by day. Let me know how else I can help."
       });
     }
 
-    // "Are you open / hours today"
-    if (AVAILABILITY_REGEX.test(trimmed)) {
+    if (AVAILABILITY_REGEX.test(text)) {
       if (openNow && hoursToday) {
         return res.json({
           reply: `Yes, we’re open today from ${hoursToday}.`
@@ -174,20 +169,23 @@ export default async function handler(req, res) {
     }
 
     /* ===============================
-       AI PATH (SAFE)
+       AI PATH — GUARDED
        =============================== */
 
-    const callRelevant = CALL_INTENT_REGEX.test(trimmed);
+    const callRelevant = CALL_INTENT_REGEX.test(text);
 
     let context = `
-Company: ${client.company_name}
+Company name: ${client.company_name}
 Description: ${client.company_info}
 
+Locations: ${Array.isArray(client.locations) ? client.locations.join(", ") : "Not specified"}
+
 Rules:
-- Answer only with known company info.
-- Never invent hours or availability.
-- Do not discourage customers.
-- Do not mention hours unless relevant.
+- Use only provided information.
+- Never invent hours, prices, policies, guarantees, or services.
+- If pricing is asked, say pricing varies.
+- Appointments are handled by phone only.
+- Do not exaggerate or claim superiority.
 `;
 
     if (callRelevant) {
@@ -195,7 +193,7 @@ Rules:
         context += `
 Calling:
 - Business is OPEN.
-- Phone number: ${client.phone_number}
+- Phone: ${client.phone_number}
 ${hoursToday ? `Today's hours: ${hoursToday}` : ""}
 `;
       } else {
@@ -204,26 +202,25 @@ Calling:
 - Business is CLOSED.
 - Do not suggest calling now.
 ${nextOpen ? `Next opening: ${nextOpen}` : ""}
-Phone number: ${client.phone_number}
+Phone: ${client.phone_number}
 `;
       }
     }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      temperature: 0.3,
+      temperature: 0.2,
       messages: [
         {
           role: "system",
           content: `
-You are a customer assistant for a local service company.
+You are a customer support assistant.
 
 Hard rules:
-- Never guess business hours.
-- Never claim availability incorrectly.
-- Answer directly.
-- Max 3 sentences.
-- Do not mention being an AI.
+- Never invent facts.
+- Never invent hours or prices.
+- If you do not know something, say so politely.
+- Keep answers under 60 words.
 `
         },
         { role: "system", content: context },
@@ -237,8 +234,9 @@ Hard rules:
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ reply: "Something went wrong." });
+    return res.status(500).json({
+      reply: "Something went wrong."
+    });
   }
 }
-
 
