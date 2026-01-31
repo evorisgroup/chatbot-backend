@@ -154,28 +154,31 @@
 
   document.getElementById("chat-send").onclick = sendMessage;
 
-  function appendMessage(sender, text) {
-    const msgBox = document.getElementById("chat-messages");
-    const msg = document.createElement("div");
+ function appendMessage(sender, text) {
+  const msgBox = document.getElementById("chat-messages");
+  const msg = document.createElement("div");
 
-    msg.style.margin = "10px 0";
-    msg.style.padding = "10px 14px";
-    msg.style.borderRadius = "8px";
-    msg.style.maxWidth = "75%";
-    msg.style.lineHeight = "1.4";
+  msg.style.margin = "10px 0";
+  msg.style.padding = "10px 14px";
+  msg.style.borderRadius = "8px";
+  msg.style.maxWidth = "75%";
+  msg.style.lineHeight = "1.4";
+  msg.style.color = "#000"; // ✅ FORCE readable text
 
-    if (sender === "user") {
-      msg.style.background = "#e0e0e0";
-      msg.style.alignSelf = "flex-end";
-    } else {
-      msg.style.background = "#ffffff";
-      msg.style.border = "1px solid #ddd";
-    }
-
-    msg.textContent = text;
-    msgBox.appendChild(msg);
-    msgBox.scrollTop = msgBox.scrollHeight;
+  if (sender === "user") {
+    msg.style.background = "#e0e0e0";
+    msg.style.alignSelf = "flex-end";
+  } else {
+    msg.style.background = "#ffffff";
+    msg.style.border = "1px solid #ddd";
+    msg.style.alignSelf = "flex-start";
   }
+
+  msg.textContent = text;
+  msgBox.appendChild(msg);
+  msgBox.scrollTop = msgBox.scrollHeight;
+}
+
 
   loadClientData();
 })();
