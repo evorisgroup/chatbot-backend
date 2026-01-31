@@ -5,6 +5,20 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// ---------- Business hours helper ----------
+function isBusinessOpen(businessHours) {
+  if (businessHours !== "weekday_9_5") return true;
+
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday
+  const hour = now.getHours();
+
+  const isWeekday = day >= 1 && day <= 5;
+  const isWorkingHour = hour >= 9 && hour < 17;
+
+  return isWeekday && isWorkingHour;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
@@ -33,9 +47,19 @@ export default async function handler(req, res) {
       });
     }
 
+    const openNow = isBusinessOpen(client.business_hours);
+
     const phoneLine = client.phone_number
-      ? `Primary phone number: ${client.phone_number}`
+      ? `Phone number: ${client.phone_number}`
       : "No phone number available.";
+
+    const hoursLine = client.business_hours === "weekday_9_5"
+      ? "Business hours: Monday to Friday, 9:00 AM to 5:00 PM."
+      : "Business hours: Not specified.";
+
+    const availabilityLine = openNow
+      ? "The business is currently open."
+      : "The business is currently closed.";
 
     const companyContext = `
 Company name: ${client.company_name}
@@ -43,14 +67,17 @@ Company name: ${client.company_name}
 Description:
 ${client.company_info}
 
-Products:
-${client.products.map(p => `${p.name} ($${p.price})`).join(", ")}
-
 Locations:
 ${client.locations.join(", ")}
 
-Phone:
 ${phoneLine}
+${hoursLine}
+${availabilityLine}
+
+Important rules:
+- Appointments are handled by phone only.
+- Only suggest calling if the business is currently open.
+- If closed, tell the user when they can call instead.
 
 FAQs:
 ${client.faqs.map(f => `Q: ${f.q} A: ${f.a}`).join(" | ")}
@@ -63,27 +90,22 @@ ${client.faqs.map(f => `Q: ${f.q} A: ${f.a}`).join(" | ")}
         {
           role: "system",
           content: `
-You are a professional customer-facing assistant for the company below.
+You are a professional customer-facing assistant.
 
 STRICT RULES:
-- Answer using ONLY the provided company information.
 - Maximum 3 sentences.
 - Maximum 60 words.
-- Be confident and concise.
+- Be concise and confident.
 - Do NOT mention being an AI.
-- Do NOT over-explain.
+- Do NOT invent information.
 
-PHONE & APPOINTMENT RULES:
-- All appointments and orders are handled by phone unless explicitly stated otherwise.
-- When users ask about pricing, scheduling, appointments, ordering, or urgent issues:
-  - Recommend calling the company.
-  - Include the phone number if available.
-- Do NOT invent online booking or forms.
-- Do NOT push the phone number unless it is relevant.
+CALLING RULES:
+- Appointments are handled by phone only.
+- Suggest calling ONLY if the business is currently open.
+- If closed, explain hours and suggest calling during open times.
+- Include the phone number when recommending a call.
 
-If information is unavailable, say so plainly and suggest the best next step.
-
-Never invent pricing, policies, locations, or services.
+If information is unavailable, say so plainly.
           `,
         },
         { role: "system", content: companyContext },
@@ -103,6 +125,7 @@ Never invent pricing, policies, locations, or services.
     });
   }
 }
+
 
 
 

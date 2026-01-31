@@ -22,8 +22,24 @@
   let typingInterval = null;
   let unreadCount = 0;
 
+  /* ===============================
+     HELPERS
+     =============================== */
   function isMobile() {
     return window.innerWidth <= 768;
+  }
+
+  function isBusinessOpen() {
+    if (!clientData?.business_hours) return true;
+
+    if (clientData.business_hours === "weekday_9_5") {
+      const now = new Date();
+      const day = now.getDay(); // 0 = Sun
+      const hour = now.getHours();
+      return day >= 1 && day <= 5 && hour >= 9 && hour < 17;
+    }
+
+    return true;
   }
 
   /* ===============================
@@ -164,8 +180,11 @@
   header.appendChild(headerRight);
   chat.appendChild(header);
 
+  /* ---------- Header Call Button (Mobile + Open Only) ---------- */
   function maybeAddCallButtonToHeader() {
-    if (!clientData?.phone_number || !isMobile()) return;
+    if (!clientData?.phone_number) return;
+    if (!isMobile()) return;
+    if (!isBusinessOpen()) return;
 
     const callIcon = document.createElement("a");
     callIcon.href = `tel:${clientData.phone_number}`;
@@ -253,8 +272,11 @@
     }
   }
 
+  /* ---------- Call CTA inside messages ---------- */
   function addCallCTA() {
-    if (!isMobile() || !clientData?.phone_number) return;
+    if (!isMobile()) return;
+    if (!clientData?.phone_number) return;
+    if (!isBusinessOpen()) return;
 
     const cta = document.createElement("a");
     cta.href = `tel:${clientData.phone_number}`;
@@ -287,7 +309,6 @@
 
     if (
       !user &&
-      clientData?.phone_number &&
       /call|phone|reach us/i.test(text)
     ) {
       addCallCTA();
