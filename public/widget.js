@@ -1,16 +1,15 @@
 /* ===============================
-   ENSURE MOBILE VIEWPORT (SELF-CONTAINED)
+   ENSURE MOBILE VIEWPORT
    =============================== */
 (function ensureViewport() {
   try {
-    const existing = document.querySelector('meta[name="viewport"]');
-    if (!existing) {
+    if (!document.querySelector('meta[name="viewport"]')) {
       const meta = document.createElement("meta");
       meta.name = "viewport";
       meta.content = "width=device-width, initial-scale=1";
       document.head.appendChild(meta);
     }
-  } catch (_) {}
+  } catch {}
 })();
 
 (() => {
@@ -19,8 +18,6 @@
 
   let clientData = null;
   let chatOpen = false;
-  let typingInterval = null;
-  let unreadCount = 0;
 
   /* ===============================
      HELPERS
@@ -29,31 +26,43 @@
     return window.innerWidth <= 768;
   }
 
-  function isBusinessOpen() {
-    if (!clientData?.weekly_hours) return true;
-
-    const today = new Date().toISOString().split("T")[0];
-    const dayName = [
+  function getDayName(idx) {
+    return [
       "sunday","monday","tuesday","wednesday",
       "thursday","friday","saturday"
-    ][new Date().getDay()];
+    ][idx];
+  }
 
-    // Holiday check
-    if (
-      clientData.holiday_rules?.dates &&
-      clientData.holiday_rules.dates.includes(today)
-    ) {
-      return false;
-    }
+  function formatTime(hm) {
+    const [h, m] = hm.split(":").map(Number);
+    const hour = h % 12 || 12;
+    const ampm = h >= 12 ? "PM" : "AM";
+    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
+  }
 
-    const ranges = clientData.weekly_hours[dayName] || [];
+  function getTodayHours() {
+    if (!clientData?.weekly_hours) return null;
+    const day = getDayName(new Date().getDay());
+    const ranges = clientData.weekly_hours[day] || [];
+    if (!ranges.length) return null;
+    return ranges.map(r => `${formatTime(r[0])} – ${formatTime(r[1])}`).join(", ");
+  }
+
+  function isBusinessOpen() {
+    if (!clientData?.weekly_hours) return false;
+
+    const todayISO = new Date().toISOString().split("T")[0];
+    if (clientData.holiday_rules?.dates?.includes(todayISO)) return false;
+
     const now = new Date();
-    const mins = now.getHours() * 60 + now.getMinutes();
+    const minsNow = now.getHours() * 60 + now.getMinutes();
+    const day = getDayName(now.getDay());
+    const ranges = clientData.weekly_hours[day] || [];
 
-    return ranges.some(([start, end]) => {
-      const [sh, sm] = start.split(":").map(Number);
-      const [eh, em] = end.split(":").map(Number);
-      return mins >= sh * 60 + sm && mins < eh * 60 + em;
+    return ranges.some(([s, e]) => {
+      const [sh, sm] = s.split(":").map(Number);
+      const [eh, em] = e.split(":").map(Number);
+      return minsNow >= sh * 60 + sm && minsNow < eh * 60 + em;
     });
   }
 
@@ -66,7 +75,7 @@
     );
     clientData = await res.json();
     applyBranding();
-    maybeAddCallButtonToHeader();
+    renderCallStatusBar();
   }
 
   /* ===============================
@@ -74,203 +83,166 @@
      =============================== */
   const bubble = document.createElement("div");
   bubble.textContent = "💬";
-  bubble.style.position = "fixed";
-  bubble.style.bottom = "20px";
-  bubble.style.right = "20px";
-  bubble.style.borderRadius = "50%";
-  bubble.style.display = "flex";
-  bubble.style.alignItems = "center";
-  bubble.style.justifyContent = "center";
-  bubble.style.cursor = "pointer";
-  bubble.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
-  bubble.style.zIndex = "999999";
-
-  function sizeBubble() {
-    bubble.style.width = isMobile() ? "88px" : "72px";
-    bubble.style.height = isMobile() ? "88px" : "72px";
-    bubble.style.fontSize = isMobile() ? "36px" : "28px";
-  }
-  sizeBubble();
-  window.addEventListener("resize", sizeBubble);
+  Object.assign(bubble.style, {
+    position: "fixed",
+    bottom: "20px",
+    right: "20px",
+    width: "72px",
+    height: "72px",
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "28px",
+    cursor: "pointer",
+    boxShadow: "0 6px 18px rgba(0,0,0,.35)",
+    zIndex: 999999
+  });
 
   document.body.appendChild(bubble);
-
-  /* ---------- Unread Badge ---------- */
-  const badge = document.createElement("div");
-  badge.style.position = "absolute";
-  badge.style.top = "6px";
-  badge.style.right = "6px";
-  badge.style.background = "red";
-  badge.style.color = "white";
-  badge.style.borderRadius = "50%";
-  badge.style.fontSize = "12px";
-  badge.style.padding = "2px 6px";
-  badge.style.display = "none";
-  bubble.appendChild(badge);
-
-  function updateBadge() {
-    badge.style.display = unreadCount > 0 ? "block" : "none";
-    badge.textContent = unreadCount || "";
-  }
 
   /* ===============================
      CHAT WINDOW
      =============================== */
   const chat = document.createElement("div");
-  chat.style.position = "fixed";
-  chat.style.background = "#fff";
-  chat.style.display = "flex";
-  chat.style.flexDirection = "column";
-  chat.style.boxShadow = "0 12px 32px rgba(0,0,0,0.35)";
-  chat.style.opacity = "0";
-  chat.style.pointerEvents = "none";
-  chat.style.transform = "translateY(40px)";
-  chat.style.transition = "transform 0.25s ease, opacity 0.25s ease";
-  chat.style.zIndex = "999998";
-  chat.style.overflow = "hidden";
-  chat.style.borderRadius = "16px";
+  Object.assign(chat.style, {
+    position: "fixed",
+    background: "#fff",
+    display: "flex",
+    flexDirection: "column",
+    boxShadow: "0 12px 32px rgba(0,0,0,.35)",
+    opacity: "0",
+    pointerEvents: "none",
+    transform: "translateY(40px)",
+    transition: "0.25s",
+    zIndex: 999998,
+    overflow: "hidden",
+    borderRadius: "16px"
+  });
 
   function sizeChat() {
     if (isMobile()) {
-      chat.style.top = "env(safe-area-inset-top, 12px)";
-      chat.style.bottom = "12px";
-      chat.style.left = "8px";
-      chat.style.right = "8px";
+      Object.assign(chat.style, {
+        top: "12px",
+        bottom: "12px",
+        left: "8px",
+        right: "8px"
+      });
     } else {
-      chat.style.width = "360px";
-      chat.style.height = "500px";
-      chat.style.bottom = "110px";
-      chat.style.right = "20px";
+      Object.assign(chat.style, {
+        width: "360px",
+        height: "500px",
+        bottom: "110px",
+        right: "20px"
+      });
     }
   }
   sizeChat();
   window.addEventListener("resize", sizeChat);
-
   document.body.appendChild(chat);
 
   /* ===============================
      HEADER
      =============================== */
   const header = document.createElement("div");
-  header.style.display = "flex";
-  header.style.alignItems = "center";
-  header.style.justifyContent = "space-between";
-  header.style.padding = "16px";
-  header.style.color = "#fff";
-  header.style.fontWeight = "600";
-  header.style.borderTopLeftRadius = "16px";
-  header.style.borderTopRightRadius = "16px";
+  Object.assign(header.style, {
+    padding: "16px",
+    color: "#fff",
+    fontWeight: "600",
+    borderTopLeftRadius: "16px",
+    borderTopRightRadius: "16px"
+  });
 
-  const headerLeft = document.createElement("div");
-  headerLeft.style.display = "flex";
-  headerLeft.style.alignItems = "center";
-  headerLeft.style.gap = "10px";
-
-  const logo = document.createElement("img");
-  logo.style.width = "30px";
-  logo.style.height = "30px";
-  logo.style.borderRadius = "6px";
-  logo.style.display = "none";
-
-  const title = document.createElement("span");
-  title.textContent = "Chat";
-
-  headerLeft.appendChild(logo);
-  headerLeft.appendChild(title);
-
-  const headerRight = document.createElement("div");
-  headerRight.style.display = "flex";
-  headerRight.style.alignItems = "center";
-  headerRight.style.gap = "14px";
-
-  const close = document.createElement("div");
-  close.textContent = "✕";
-  close.style.cursor = "pointer";
-  close.style.fontSize = "20px";
-  close.onclick = closeChat;
-
-  headerRight.appendChild(close);
-  header.appendChild(headerLeft);
-  header.appendChild(headerRight);
+  const title = document.createElement("div");
+  header.appendChild(title);
   chat.appendChild(header);
 
-  function maybeAddCallButtonToHeader() {
+  /* ===============================
+     CALL STATUS BAR
+     =============================== */
+  const callBar = document.createElement("a");
+  Object.assign(callBar.style, {
+    display: "none",
+    padding: "12px 16px",
+    fontSize: "14px",
+    fontWeight: "500",
+    textDecoration: "none",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomLeftRadius: "12px",
+    borderBottomRightRadius: "12px",
+    cursor: "pointer"
+  });
+
+  const callText = document.createElement("span");
+  const callAction = document.createElement("span");
+  callAction.textContent = "Call Now";
+
+  callBar.append(callText, callAction);
+  chat.appendChild(callBar);
+
+  function renderCallStatusBar() {
     if (!clientData?.phone_number) return;
-    if (!isMobile()) return;
     if (!isBusinessOpen()) return;
 
-    const callIcon = document.createElement("a");
-    callIcon.href = `tel:${clientData.phone_number}`;
-    callIcon.textContent = "📞";
-    callIcon.style.fontSize = "20px";
-    callIcon.style.color = "#fff";
-    callIcon.style.textDecoration = "none";
+    const hours = getTodayHours();
+    if (!hours) return;
 
-    headerRight.insertBefore(callIcon, close);
+    callBar.href = `tel:${clientData.phone_number}`;
+    callText.textContent = `Open Today · ${hours}`;
+    callBar.style.display = "flex";
+    callBar.style.background = clientData.primary_color;
+    callBar.style.color = "#fff";
   }
 
   /* ===============================
      MESSAGES
      =============================== */
   const messages = document.createElement("div");
-  messages.style.flex = "1";
-  messages.style.padding = "16px";
-  messages.style.overflowY = "auto";
-  messages.style.background = "#fafafa";
+  Object.assign(messages.style, {
+    flex: "1",
+    padding: "16px",
+    overflowY: "auto",
+    background: "#fafafa"
+  });
   chat.appendChild(messages);
 
-  const typing = document.createElement("div");
-  typing.style.fontSize = "13px";
-  typing.style.opacity = "0.7";
-  typing.style.display = "none";
-  messages.appendChild(typing);
-
-  function showTyping() {
-    let dots = 0;
-    typing.style.display = "block";
-    typingInterval = setInterval(() => {
-      dots = (dots + 1) % 4;
-      typing.textContent = "Bot is typing" + ".".repeat(dots);
-    }, 400);
-  }
-
-  function hideTyping() {
-    clearInterval(typingInterval);
-    typing.style.display = "none";
-  }
-
   /* ===============================
-     INPUT (FIXED OVERFLOW)
+     INPUT
      =============================== */
   const inputWrap = document.createElement("div");
-  inputWrap.style.padding = "16px";
-  inputWrap.style.borderTop = "1px solid #ddd";
-  inputWrap.style.boxSizing = "border-box";
+  Object.assign(inputWrap.style, {
+    padding: "16px",
+    borderTop: "1px solid #ddd",
+    boxSizing: "border-box"
+  });
 
   const textarea = document.createElement("textarea");
+  Object.assign(textarea.style, {
+    width: "100%",
+    padding: "12px",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    fontSize: "16px",
+    resize: "none",
+    boxSizing: "border-box"
+  });
   textarea.placeholder = "Type a message…";
-  textarea.rows = 2;
-  textarea.style.width = "100%";
-  textarea.style.padding = "12px";
-  textarea.style.borderRadius = "8px";
-  textarea.style.border = "1px solid #ccc";
-  textarea.style.fontSize = "16px";
-  textarea.style.resize = "none";
-  textarea.style.boxSizing = "border-box";
 
   const send = document.createElement("button");
   send.textContent = "Send";
-  send.style.marginTop = "10px";
-  send.style.width = "100%";
-  send.style.padding = "12px";
-  send.style.border = "none";
-  send.style.borderRadius = "8px";
-  send.style.color = "#fff";
-  send.style.cursor = "pointer";
-  send.style.boxSizing = "border-box";
+  Object.assign(send.style, {
+    marginTop: "10px",
+    width: "100%",
+    padding: "12px",
+    borderRadius: "8px",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    boxSizing: "border-box"
+  });
 
-  inputWrap.appendChild(textarea);
-  inputWrap.appendChild(send);
+  inputWrap.append(textarea, send);
   chat.appendChild(inputWrap);
 
   /* ===============================
@@ -282,101 +254,18 @@
     header.style.background = clientData.primary_color;
     send.style.background = clientData.primary_color;
     title.textContent = clientData.company_name;
-    if (clientData.logo_url) {
-      logo.src = clientData.logo_url;
-      logo.style.display = "block";
-    }
   }
 
-  /* ---------- Call CTA inside messages ---------- */
-  function addCallCTA() {
-    if (!isMobile()) return;
-    if (!clientData?.phone_number) return;
-    if (!isBusinessOpen()) return;
-
-    const cta = document.createElement("a");
-    cta.href = `tel:${clientData.phone_number}`;
-    cta.textContent = "📞 Call Now";
-    cta.style.display = "inline-block";
-    cta.style.marginTop = "8px";
-    cta.style.padding = "10px 14px";
-    cta.style.borderRadius = "20px";
-    cta.style.background = clientData.primary_color;
-    cta.style.color = "#fff";
-    cta.style.textDecoration = "none";
-    cta.style.fontWeight = "600";
-
-    messages.appendChild(cta);
-    messages.scrollTop = messages.scrollHeight;
-  }
-
-  function addMessage(text, user) {
-    const msg = document.createElement("div");
-    msg.style.margin = "10px 0";
-    msg.style.padding = "12px 14px";
-    msg.style.borderRadius = "10px";
-    msg.style.maxWidth = "80%";
-    msg.style.color = "#000";
-    msg.style.alignSelf = user ? "flex-end" : "flex-start";
-    msg.style.background = user ? "#e0e0e0" : "#fff";
-    msg.style.border = "1px solid #ddd";
-    msg.textContent = text;
-
-    messages.insertBefore(msg, typing);
-
-    if (!user && /call|phone|reach us|try again/i.test(text)) {
-      addCallCTA();
-    }
-
-    messages.scrollTop = messages.scrollHeight;
-  }
-
-  async function sendMessage() {
-    const text = textarea.value.trim();
-    if (!text) return;
-    textarea.value = "";
-    addMessage(text, true);
-    showTyping();
-
-    const res = await fetch(
-      "https://chatbot-backend-tawny-alpha.vercel.app/api/chat",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, client_id: CLIENT_ID }),
-      }
-    );
-
-    const data = await res.json();
-    hideTyping();
-
-    if (!chatOpen) {
-      unreadCount++;
-      updateBadge();
-    }
-
-    addMessage(data.reply, false);
-  }
-
-  send.onclick = sendMessage;
-
-  function openChat() {
-    unreadCount = 0;
-    updateBadge();
-    chat.style.opacity = "1";
-    chat.style.pointerEvents = "auto";
-    chat.style.transform = "translateY(0)";
-    chatOpen = true;
-  }
-
-  function closeChat() {
-    chat.style.opacity = "0";
-    chat.style.pointerEvents = "none";
-    chat.style.transform = "translateY(40px)";
-    chatOpen = false;
-  }
-
-  bubble.onclick = () => (chatOpen ? closeChat() : openChat());
+  /* ===============================
+     OPEN / CLOSE
+     =============================== */
+  bubble.onclick = () => {
+    chatOpen = !chatOpen;
+    chat.style.opacity = chatOpen ? "1" : "0";
+    chat.style.pointerEvents = chatOpen ? "auto" : "none";
+    chat.style.transform = chatOpen ? "translateY(0)" : "translateY(40px)";
+  };
 
   loadClientData();
 })();
+
