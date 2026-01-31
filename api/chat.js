@@ -33,6 +33,10 @@ export default async function handler(req, res) {
       });
     }
 
+    const phoneLine = client.phone_number
+      ? `Primary phone number: ${client.phone_number}`
+      : "No phone number available.";
+
     const companyContext = `
 Company name: ${client.company_name}
 
@@ -44,6 +48,9 @@ ${client.products.map(p => `${p.name} ($${p.price})`).join(", ")}
 
 Locations:
 ${client.locations.join(", ")}
+
+Phone:
+${phoneLine}
 
 FAQs:
 ${client.faqs.map(f => `Q: ${f.q} A: ${f.a}`).join(" | ")}
@@ -65,10 +72,18 @@ STRICT RULES:
 - Be confident and concise.
 - Do NOT mention being an AI.
 - Do NOT over-explain.
-- If more detail is needed, ask a short follow-up question instead.
-- If information is unavailable, say so plainly and suggest a next step.
 
-Do not invent pricing, policies, or capabilities.
+PHONE & APPOINTMENT RULES:
+- All appointments and orders are handled by phone unless explicitly stated otherwise.
+- When users ask about pricing, scheduling, appointments, ordering, or urgent issues:
+  - Recommend calling the company.
+  - Include the phone number if available.
+- Do NOT invent online booking or forms.
+- Do NOT push the phone number unless it is relevant.
+
+If information is unavailable, say so plainly and suggest the best next step.
+
+Never invent pricing, policies, locations, or services.
           `,
         },
         { role: "system", content: companyContext },
@@ -78,7 +93,7 @@ Do not invent pricing, policies, or capabilities.
 
     const reply =
       completion.choices?.[0]?.message?.content ||
-      "I’m not sure about that. Could you clarify what you’re looking for?";
+      "Could you clarify what you’re looking for?";
 
     return res.json({ reply });
   } catch (err) {
@@ -88,6 +103,7 @@ Do not invent pricing, policies, or capabilities.
     });
   }
 }
+
 
 
 
