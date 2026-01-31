@@ -5,14 +5,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const GREETING_REGEX = /^(hi|hello|hey|good morning|good afternoon|good evening)\b/i;
+const CALL_INTENT_REGEX = /(call|phone|appointment|book|schedule|pricing|price|cost|order|quote)/i;
+
 /* ===============================
    TIME HELPERS
    =============================== */
-
-const DAY_NAMES = [
-  "Sunday","Monday","Tuesday","Wednesday",
-  "Thursday","Friday","Saturday"
-];
+const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 function minutes(hm) {
   const [h, m] = hm.split(":").map(Number);
@@ -26,70 +25,45 @@ function formatTime(hm) {
   return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
-function formatWeeklyHours(weekly) {
-  if (!weekly) return "Hours not available.";
+function isOpenNow(client) {
+  if (!client.weekly_hours) return true;
 
-  return Object.entries(weekly)
-    .map(([day, ranges]) => {
-      if (!ranges.length) return `${day}: Closed`;
-      const times = ranges
-        .map(r => `${formatTime(r[0])} – ${formatTime(r[1])}`)
-        .join(", ");
-      return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${times}`;
-    })
-    .join("\n");
-}
-
-function getNextOpenTime(weekly, holidays = []) {
-  if (!weekly) return null;
-
-  const now = new Date();
-  const todayIndex = now.getDay();
-  const todayISO = now.toISOString().split("T")[0];
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  for (let offset = 0; offset < 7; offset++) {
-    const dayIndex = (todayIndex + offset) % 7;
-    const dayName = DAY_NAMES[dayIndex].toLowerCase();
-
-    // Skip holidays
-    const checkDate = new Date(now);
-    checkDate.setDate(now.getDate() + offset);
-    const checkISO = checkDate.toISOString().split("T")[0];
-    if (holidays.includes(checkISO)) continue;
-
-    const ranges = weekly[dayName] || [];
-    for (const [start] of ranges) {
-      const startMin = minutes(start);
-      if (offset > 0 || startMin > currentMinutes) {
-        return `${DAY_NAMES[dayIndex]} at ${formatTime(start)}`;
-      }
-    }
-  }
-
-  return null;
-}
-
-function isOpenNow(weekly) {
-  if (!weekly) return false;
+  const todayISO = new Date().toISOString().split("T")[0];
+  if (client.holiday_rules?.dates?.includes(todayISO)) return false;
 
   const now = new Date();
   const dayKey = DAY_NAMES[now.getDay()].toLowerCase();
   const minsNow = now.getHours() * 60 + now.getMinutes();
-  const ranges = weekly[dayKey] || [];
+  const ranges = client.weekly_hours[dayKey] || [];
 
   return ranges.some(([s, e]) => minsNow >= minutes(s) && minsNow < minutes(e));
+}
+
+function getHoursSummary(client) {
+  if (!client.weekly_hours) return null;
+
+  const dayKey = DAY_NAMES[new Date().getDay()].toLowerCase();
+  const ranges = client.weekly_hours[dayKey] || [];
+  if (!ranges.length) return null;
+
+  return ranges.map(r => `${formatTime(r[0])} – ${formatTime(r[1])}`).join(", ");
 }
 
 /* ===============================
    HANDLER
    =============================== */
-
 export default async function handler(req, res) {
   try {
     const { message, client_id } = req.body;
     if (!message || !client_id) {
       return res.status(400).json({ reply: "Invalid request." });
+    }
+
+    // Rule 1: greetings are always neutral
+    if (GREETING_REGEX.test(message.trim())) {
+      return res.json({
+        reply: "Hi! How can I help you today?"
+      });
     }
 
     const supabase = createClient(
@@ -104,55 +78,51 @@ export default async function handler(req, res) {
       .single();
 
     if (!client) {
-      return res.json({ reply: "Company information is unavailable." });
+      return res.json({ reply: "How can I help you today?" });
     }
 
-    const openNow = isOpenNow(client.weekly_hours);
-    const hoursText = formatWeeklyHours(client.weekly_hours);
-    const nextOpen = getNextOpenTime(
-    client.weekly_hours,
-    client.holiday_rules?.dates || []
-  );
+    const openNow = isOpenNow(client);
+    const callRelevant = CALL_INTENT_REGEX.test(message);
+    const hoursToday = getHoursSummary(client);
 
-    const context = `
+    // Build minimal, sales-safe context
+    let context = `
 Company: ${client.company_name}
 Description: ${client.company_info}
-Phone: ${client.phone_number || "Not available"}
-
-Current status:
-${openNow ? "OPEN" : "CLOSED"}
-
-Regular hours:
-${hoursText}
-
-${!openNow && nextOpen ? `Next opening time: ${nextOpen}` : ""}
 
 Rules:
-- Appointments are handled by phone only.
-- Suggest calling ONLY if currently open.
-- If closed, explain hours and next opening time.
-- If user reports a missed or failed call, respond calmly and suggest trying again during open hours.
+- Be helpful and concise.
+- Do not mention hours or closure unless calling is relevant.
+- Only suggest calling if it adds value.
 `;
+
+    // Only include call info if relevant
+    if (callRelevant) {
+      context += `
+Calling policy:
+- Appointments and pricing are handled by phone.
+- The business is currently ${openNow ? "open" : "closed"}.
+${openNow && hoursToday ? `Today's hours: ${hoursToday}` : ""}
+Phone number: ${client.phone_number || "Not available"}
+`;
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      temperature: 0.2,
+      temperature: 0.3,
       messages: [
         {
           role: "system",
           content: `
-You are a professional customer service assistant.
+You are a professional, friendly customer assistant.
 
-Constraints:
-- Max 3 sentences
-- Max 60 words
-- No AI mentions
-- Be calm and helpful
-
-Behavior:
-- If open, recommend calling when appropriate.
-- If closed, clearly state hours and next opening time.
-- If the user says their call didn’t go through, acknowledge it and suggest retrying during business hours.
+Hard rules:
+- Never discourage the user.
+- Never volunteer that the business is closed unless calling is relevant.
+- Never push calling if the question was already answered.
+- Be warm, calm, and reassuring.
+- Max 3 sentences, max 60 words.
+- Do not mention being an AI.
 `
         },
         { role: "system", content: context },
@@ -161,16 +131,13 @@ Behavior:
     });
 
     return res.json({
-      reply: completion.choices[0]?.message?.content
+      reply:
+        completion.choices[0]?.message?.content ||
+        "How can I help you?"
     });
+
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ reply: "Server error." });
+    return res.status(500).json({ reply: "Something went wrong." });
   }
 }
-
-
-
-
-
-
