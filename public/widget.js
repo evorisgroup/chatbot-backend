@@ -8,33 +8,37 @@
   let chatOpen = false;
 
   /* =========================================================
-     ROBUST MOBILE DETECTION (AS BEFORE)
+     HARD MOBILE FIXES (DO NOT REMOVE)
   ========================================================= */
+
+  // 1. Inject viewport meta if missing or wrong
+  (function ensureViewportMeta() {
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "viewport";
+      document.head.appendChild(meta);
+    }
+    meta.content =
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
+  })();
 
   function isTouchDevice() {
     return (
       "ontouchstart" in window ||
-      navigator.maxTouchPoints > 0 ||
-      navigator.msMaxTouchPoints > 0
+      navigator.maxTouchPoints > 0
     );
   }
 
-  function isSmallViewport() {
-    return Math.min(window.innerWidth, window.innerHeight) < 768;
-  }
-
   function isMobile() {
-    // This is the key: capability + viewport, not just width
-    return isTouchDevice() && isSmallViewport();
+    return isTouchDevice();
   }
 
-  function safeMobileHeight() {
-    // This was critical to avoid header being cut off
+  function getSafeHeight() {
+    if (window.visualViewport && window.visualViewport.height) {
+      return window.visualViewport.height;
+    }
     return window.innerHeight;
-  }
-
-  function supportsHover() {
-    return window.matchMedia("(hover: hover)").matches;
   }
 
   /* =========================================================
@@ -67,8 +71,7 @@
     .then(data => {
       clientData = data;
       initWidget();
-    })
-    .catch(() => {});
+    });
 
   /* =========================================================
      INIT
@@ -78,7 +81,7 @@
     const brand = safeColor(clientData.primary_color, "#2563eb");
     const mobile = isMobile();
 
-    /* ---- ROOT (NO FLASH) ---- */
+    /* ---- ROOT ---- */
 
     const root = el("div", {
       style: {
@@ -117,28 +120,16 @@
     });
     bubble.textContent = "💬";
 
-    if (supportsHover()) {
-      bubble.style.transition = "transform 0.15s ease, box-shadow 0.15s ease";
-      bubble.onmouseenter = () => {
-        bubble.style.transform = "scale(1.06)";
-        bubble.style.boxShadow = "0 12px 32px rgba(0,0,0,0.35)";
-      };
-      bubble.onmouseleave = () => {
-        bubble.style.transform = "none";
-        bubble.style.boxShadow = "0 8px 24px rgba(0,0,0,0.25)";
-      };
-    }
-
-    /* ---- CHAT WINDOW (RESTORED MOBILE LOGIC) ---- */
+    /* ---- CHAT WINDOW ---- */
 
     const chat = el("div", {
       style: {
         position: "fixed",
-        bottom: mobile ? "8px" : "90px",
-        right: mobile ? "8px" : "20px",
         left: mobile ? "8px" : "auto",
+        right: mobile ? "8px" : "20px",
+        bottom: mobile ? "8px" : "90px",
         width: mobile ? "auto" : "360px",
-        height: mobile ? `${safeMobileHeight() - 16}px` : "520px",
+        height: mobile ? `${getSafeHeight() - 16}px` : "520px",
         background: "#fff",
         borderRadius: "16px",
         boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
@@ -164,11 +155,7 @@
     });
 
     const headerLeft = el("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: "10px"
-      }
+      style: { display: "flex", alignItems: "center", gap: "10px" }
     });
 
     if (clientData.logo_url) {
@@ -178,37 +165,26 @@
           height: "36px",
           borderRadius: "6px",
           overflow: "hidden",
-          background: "#fff",
-          flexShrink: "0"
+          background: "#fff"
         }
       });
-
       logoWrap.appendChild(
         el("img", {
           src: clientData.logo_url,
-          style: {
-            width: "100%",
-            height: "100%",
-            objectFit: "cover"
-          }
+          style: { width: "100%", height: "100%", objectFit: "cover" }
         })
       );
-
       headerLeft.appendChild(logoWrap);
     }
 
     headerLeft.appendChild(
-      el("div", {
-        style: { fontWeight: "600", fontSize: "15px" }
-      }, [document.createTextNode(clientData.company_name || "Chat")])
+      el("div", { style: { fontWeight: "600" } },
+        [document.createTextNode(clientData.company_name || "Chat")]
+      )
     );
 
     const closeBtn = el("div", {
-      style: {
-        fontSize: "22px",
-        cursor: "pointer",
-        lineHeight: "1"
-      },
+      style: { fontSize: "22px", cursor: "pointer" },
       onclick: toggleChat
     }, [document.createTextNode("×")]);
 
@@ -248,7 +224,7 @@
         borderRadius: "12px",
         border: "1px solid #d1d5db",
         padding: "10px",
-        fontSize: "14px",
+        fontSize: "16px", // 🔒 critical: prevents iOS zoom
         outline: "none"
       }
     });
@@ -267,8 +243,8 @@
         border: "none",
         borderRadius: "12px",
         padding: "0 16px",
-        cursor: "pointer",
-        fontSize: "14px"
+        fontSize: "14px",
+        cursor: "pointer"
       },
       onclick: sendMessage
     }, [document.createTextNode("Send")]);
@@ -283,14 +259,10 @@
     root.appendChild(bubble);
     root.appendChild(chat);
 
-    /* ---- DEFAULT MESSAGE ---- */
-
     addMessage(
       `Hi! I’m the virtual assistant for ${clientData.company_name}. How can I help you today?`,
       "bot"
     );
-
-    /* ---- REVEAL ---- */
 
     requestAnimationFrame(() => {
       root.style.visibility = "visible";
@@ -298,9 +270,7 @@
       root.style.pointerEvents = "auto";
     });
 
-    /* =========================================================
-       FUNCTIONS
-    ========================================================= */
+    /* ---- FUNCTIONS ---- */
 
     function toggleChat() {
       chatOpen = !chatOpen;
@@ -319,7 +289,6 @@
           alignSelf: who === "user" ? "flex-end" : "flex-start"
         }
       }, [document.createTextNode(text)]);
-
       messages.appendChild(msg);
       messages.scrollTop = messages.scrollHeight;
     }
@@ -334,10 +303,7 @@
       fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: CLIENT_ID,
-          message: text
-        })
+        body: JSON.stringify({ client_id: CLIENT_ID, message: text })
       })
         .then(r => r.json())
         .then(r => addMessage(r.reply, "bot"))
@@ -345,5 +311,6 @@
     }
   }
 })();
+
 
 
