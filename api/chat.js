@@ -1,74 +1,101 @@
-// /api/chat.js
-import { createClient } from '@supabase/supabase-js';
-
-// Read environment variables (server-side only)
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
-// Initialize Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+import { createClient } from "@supabase/supabase-js";
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  try {
-    const { message, client_id } = req.body;
+  const { message, client_id } = req.body;
 
-    if (!message || !client_id) {
-      return res.status(400).json({ error: 'Missing message or client_id' });
-    }
-
-    // Fetch client data from Supabase
-    const { data: clients, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('client_id', client_id)
-      .limit(1)
-      .single();
-
-    if (error || !clients) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-
-    const client = clients;
-
-    // Normalize message for keyword matching
-    const msg = message.toLowerCase();
-
-    // Responses based on keywords
-    let reply = "Sorry, I don't have that information right now.";
-
-    if (msg.includes('name') || msg.includes('company')) {
-      reply = `Our company is ${client.name}.`;
-    } else if (msg.includes('product') || msg.includes('service')) {
-      if (client.products && client.products.length > 0) {
-        reply = `We offer: ${client.products.join(', ')}.`;
-      } else {
-        reply = `We currently have no products listed.`;
-      }
-    } else if (msg.includes('contact') || msg.includes('email') || msg.includes('phone')) {
-      const email = client.contact_email || 'N/A';
-      const phone = client.contact_phone || 'N/A';
-      reply = `You can contact us at ${email} or ${phone}.`;
-    } else if (msg.includes('location') || msg.includes('office')) {
-      if (client.locations && client.locations.length > 0) {
-        reply = `We have offices in: ${client.locations.join(', ')}.`;
-      } else {
-        reply = `Our locations are not listed currently.`;
-      }
-    } else if (msg.includes('faq') || msg.includes('question')) {
-      if (client.faqs && client.faqs.length > 0) {
-        reply = `Here are some FAQs:\n- ${client.faqs.join('\n- ')}`;
-      } else {
-        reply = `No FAQs are available at this time.`;
-      }
-    }
-
-    return res.status(200).json({ reply });
-  } catch (err) {
-    console.error('Chat API error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+  if (!client_id) {
+    return res.status(400).json({ reply: "Missing client_id" });
   }
+
+  // Debug logging (you can remove later)
+  console.log("Incoming chat request:", { message, client_id });
+
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Fetch client record
+  const { data: client, error } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("client_id", client_id)
+    .single();
+
+  if (error || !client) {
+    console.error("Supabase error:", error);
+    return res.json({
+      reply: "I'm having trouble loading client data right now.",
+    });
+  }
+
+  console.log("Loaded client from Supabase:", client); // DEBUG
+
+  const msg = message.toLowerCase();
+
+  // ======= Keyword Logic =======
+
+  if (msg.includes("name")) {
+    return res.json({ reply: `This company is called ${client.name}.` });
+  }
+
+  if (msg.includes("product")) {
+    if (client.products?.length > 0) {
+      return res.json({
+        reply: `Here are the products: ${client.products.join(", ")}.`,
+      });
+    } else {
+      return res.json({ reply: "This company hasn't added products yet." });
+    }
+  }
+
+  if (msg.includes("email") || msg.includes("contact")) {
+    if (client.contact_email) {
+      return res.json({
+        reply: `You can contact them at: ${client.contact_email}`,
+      });
+    } else {
+      return res.json({ reply: "No contact email is listed." });
+    }
+  }
+
+  if (msg.includes("phone")) {
+    if (client.contact_phone) {
+      return res.json({
+        reply: `Their phone number is: ${client.contact_phone}`,
+      });
+    } else {
+      return res.json({ reply: "No phone number provided." });
+    }
+  }
+
+  if (msg.includes("location")) {
+    if (client.locations?.length > 0) {
+      return res.json({
+        reply: `They operate in: ${client.locations.join(", ")}.`,
+      });
+    } else {
+      return res.json({ reply: "No locations listed." });
+    }
+  }
+
+  if (msg.includes("faq") || msg.includes("question")) {
+    if (client.faqs?.length > 0) {
+      return res.json({
+        reply: `Here are some FAQs:\n• ${client.faqs.join("\n• ")}`,
+      });
+    } else {
+      return res.json({ reply: "No FAQs available." });
+    }
+  }
+
+  // Default catch-all
+  return res.json({
+    reply: `I’m here to help with anything about ${client.name}. Ask about products, contact, locations, or FAQs!`,
+  });
 }
+
