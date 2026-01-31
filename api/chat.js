@@ -20,6 +20,9 @@ const GREETING_ONLY_REGEX =
 const CALL_INTENT_REGEX =
   /(call|phone|appointment|book|schedule|pricing|price|cost|order|quote)/i;
 
+const AVAILABILITY_REGEX =
+  /(are you open|open today|open now|hours today|what are your hours|business hours|when are you open)/i;
+
 /* ===============================
    TIME HELPERS
    =============================== */
@@ -52,7 +55,7 @@ function isOpenNow(client) {
   );
 }
 
-function getHoursSummary(client) {
+function getHoursToday(client) {
   if (!client.weekly_hours) return null;
 
   const dayKey = DAY_NAMES[new Date().getDay()].toLowerCase();
@@ -105,7 +108,7 @@ export default async function handler(req, res) {
 
     const trimmed = message.trim();
 
-    // Greeting-only → friendly response, no business logic
+    // Greeting only
     if (GREETING_ONLY_REGEX.test(trimmed)) {
       return res.json({
         reply: "Hi! How can I help you today?"
@@ -128,13 +131,36 @@ export default async function handler(req, res) {
     }
 
     const openNow = isOpenNow(client);
-    const callRelevant = CALL_INTENT_REGEX.test(trimmed);
-    const hoursToday = getHoursSummary(client);
-    const nextOpen = !openNow ? getNextOpenTime(client) : null;
+    const hoursToday = getHoursToday(client);
+    const nextOpen = getNextOpenTime(client);
 
     /* ===============================
-       CONTEXT CONSTRUCTION
+       AVAILABILITY QUESTIONS (HARD PATH)
        =============================== */
+
+    if (AVAILABILITY_REGEX.test(trimmed)) {
+      if (openNow && hoursToday) {
+        return res.json({
+          reply: `Yes, we’re open today from ${hoursToday}.`
+        });
+      }
+
+      if (!openNow && nextOpen) {
+        return res.json({
+          reply: `No, we’re currently closed. Our next opening is ${nextOpen}.`
+        });
+      }
+
+      return res.json({
+        reply: "Our business hours vary by day. Let me know what you’re looking for and I can help."
+      });
+    }
+
+    /* ===============================
+       AI PATH
+       =============================== */
+
+    const callRelevant = CALL_INTENT_REGEX.test(trimmed);
 
     let context = `
 Company: ${client.company_name}
@@ -142,31 +168,24 @@ Description: ${client.company_info}
 
 Rules:
 - Be helpful, calm, and professional.
-- Do not discourage the user.
 - Do not mention hours or closure unless calling is relevant.
-- Do not push calling if the question is already answered.
+- Do not invent hours.
 `;
 
     if (callRelevant) {
       if (openNow) {
         context += `
 Calling:
-- The business is currently OPEN.
-- Pricing and appointments are handled by phone.
+- Business is OPEN.
 - Phone number: ${client.phone_number}
 ${hoursToday ? `Today's hours: ${hoursToday}` : ""}
 `;
       } else {
         context += `
 Calling:
-- The business is currently CLOSED.
-- Do NOT suggest calling right now.
-- Clearly explain that the business is closed.
-- Tell the user when to call instead.
-- Be reassuring and non-alarming.
-
-${hoursToday ? `Regular hours today: ${hoursToday}` : ""}
-${nextOpen ? `Next opening time: ${nextOpen}` : ""}
+- Business is CLOSED.
+- Do NOT recommend calling now.
+${nextOpen ? `Next opening: ${nextOpen}` : ""}
 Phone number: ${client.phone_number}
 `;
       }
@@ -182,11 +201,10 @@ Phone number: ${client.phone_number}
 You are a customer-facing assistant for a local service business.
 
 Hard rules:
-- Never discourage customers.
-- Never mention being closed unless calling is relevant.
-- If you mention a phone number, availability MUST be mentioned.
+- Never invent hours.
+- Never imply availability incorrectly.
+- Answer the user's question directly.
 - Max 3 sentences.
-- Max 60 words.
 - Do not mention being an AI.
 `
         },
@@ -208,3 +226,4 @@ Hard rules:
     });
   }
 }
+
