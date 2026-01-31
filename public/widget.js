@@ -30,32 +30,32 @@
   }
 
   function isBusinessOpen() {
-  if (!clientData?.weekly_hours) return true;
+    if (!clientData?.weekly_hours) return true;
 
-  const today = new Date().toISOString().split("T")[0];
-  const dayName = [
-    "sunday","monday","tuesday","wednesday",
-    "thursday","friday","saturday"
-  ][new Date().getDay()];
+    const today = new Date().toISOString().split("T")[0];
+    const dayName = [
+      "sunday","monday","tuesday","wednesday",
+      "thursday","friday","saturday"
+    ][new Date().getDay()];
 
-  // Holiday check
-  if (
-    clientData.holiday_rules?.dates &&
-    clientData.holiday_rules.dates.includes(today)
-  ) {
-    return false;
+    // Holiday check
+    if (
+      clientData.holiday_rules?.dates &&
+      clientData.holiday_rules.dates.includes(today)
+    ) {
+      return false;
+    }
+
+    const ranges = clientData.weekly_hours[dayName] || [];
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+
+    return ranges.some(([start, end]) => {
+      const [sh, sm] = start.split(":").map(Number);
+      const [eh, em] = end.split(":").map(Number);
+      return mins >= sh * 60 + sm && mins < eh * 60 + em;
+    });
   }
-
-  const ranges = clientData.weekly_hours[dayName] || [];
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-
-  return ranges.some(([start, end]) => {
-    const [sh, sm] = start.split(":").map(Number);
-    const [eh, em] = end.split(":").map(Number);
-    return mins >= sh * 60 + sm && mins < eh * 60 + em;
-  });
-}
 
   /* ===============================
      FETCH CLIENT DATA
@@ -73,7 +73,7 @@
      CHAT BUBBLE
      =============================== */
   const bubble = document.createElement("div");
-  bubble.innerHTML = "💬";
+  bubble.textContent = "💬";
   bubble.style.position = "fixed";
   bubble.style.bottom = "20px";
   bubble.style.right = "20px";
@@ -128,6 +128,7 @@
   chat.style.transition = "transform 0.25s ease, opacity 0.25s ease";
   chat.style.zIndex = "999998";
   chat.style.overflow = "hidden";
+  chat.style.borderRadius = "16px";
 
   function sizeChat() {
     if (isMobile()) {
@@ -135,13 +136,11 @@
       chat.style.bottom = "12px";
       chat.style.left = "8px";
       chat.style.right = "8px";
-      chat.style.borderRadius = "16px";
     } else {
       chat.style.width = "360px";
       chat.style.height = "500px";
       chat.style.bottom = "110px";
       chat.style.right = "20px";
-      chat.style.borderRadius = "16px";
     }
   }
   sizeChat();
@@ -195,7 +194,6 @@
   header.appendChild(headerRight);
   chat.appendChild(header);
 
-  /* ---------- Header Call Button (Mobile + Open Only) ---------- */
   function maybeAddCallButtonToHeader() {
     if (!clientData?.phone_number) return;
     if (!isMobile()) return;
@@ -242,11 +240,12 @@
   }
 
   /* ===============================
-     INPUT
+     INPUT (FIXED OVERFLOW)
      =============================== */
   const inputWrap = document.createElement("div");
   inputWrap.style.padding = "16px";
   inputWrap.style.borderTop = "1px solid #ddd";
+  inputWrap.style.boxSizing = "border-box";
 
   const textarea = document.createElement("textarea");
   textarea.placeholder = "Type a message…";
@@ -257,6 +256,7 @@
   textarea.style.border = "1px solid #ccc";
   textarea.style.fontSize = "16px";
   textarea.style.resize = "none";
+  textarea.style.boxSizing = "border-box";
 
   const send = document.createElement("button");
   send.textContent = "Send";
@@ -267,6 +267,7 @@
   send.style.borderRadius = "8px";
   send.style.color = "#fff";
   send.style.cursor = "pointer";
+  send.style.boxSizing = "border-box";
 
   inputWrap.appendChild(textarea);
   inputWrap.appendChild(send);
@@ -320,12 +321,10 @@
     msg.style.background = user ? "#e0e0e0" : "#fff";
     msg.style.border = "1px solid #ddd";
     msg.textContent = text;
+
     messages.insertBefore(msg, typing);
 
-    if (
-      !user &&
-      /call|phone|reach us/i.test(text)
-    ) {
+    if (!user && /call|phone|reach us|try again/i.test(text)) {
       addCallCTA();
     }
 
@@ -381,6 +380,3 @@
 
   loadClientData();
 })();
-
-
-

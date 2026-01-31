@@ -6,61 +6,72 @@ const openai = new OpenAI({
 });
 
 /* ===============================
-   AVAILABILITY HELPERS
+   TIME HELPERS
    =============================== */
 
-function todayISO() {
-  return new Date().toISOString().split("T")[0];
+const DAY_NAMES = [
+  "Sunday","Monday","Tuesday","Wednesday",
+  "Thursday","Friday","Saturday"
+];
+
+function minutes(hm) {
+  const [h, m] = hm.split(":").map(Number);
+  return h * 60 + m;
 }
 
-function getTodayName() {
-  return [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday"
-  ][new Date().getDay()];
+function formatTime(hm) {
+  const [h, m] = hm.split(":").map(Number);
+  const hour = h % 12 || 12;
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
-function isHoliday(client) {
-  const today = todayISO();
-  const rules = client.holiday_rules;
+function formatWeeklyHours(weekly) {
+  if (!weekly) return "Hours not available.";
 
-  if (!rules) return false;
-
-  if (rules.type === "us_federal") {
-    // Conservative: handled externally later
-    // For now, rely on explicit dates only
-    return Array.isArray(rules.dates) && rules.dates.includes(today);
-  }
-
-  if (rules.type === "custom") {
-    return Array.isArray(rules.dates) && rules.dates.includes(today);
-  }
-
-  return false;
+  return Object.entries(weekly)
+    .map(([day, ranges]) => {
+      if (!ranges.length) return `${day}: Closed`;
+      const times = ranges
+        .map(r => `${formatTime(r[0])} – ${formatTime(r[1])}`)
+        .join(", ");
+      return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${times}`;
+    })
+    .join("\n");
 }
 
-function isOpenNow(client) {
-  if (!client.weekly_hours) return true;
-  if (isHoliday(client)) return false;
+function getNextOpenTime(weekly) {
+  if (!weekly) return null;
 
-  const today = getTodayName();
   const now = new Date();
+  const today = now.getDay();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const ranges = client.weekly_hours[today] || [];
+  for (let offset = 0; offset < 7; offset++) {
+    const dayIndex = (today + offset) % 7;
+    const dayKey = DAY_NAMES[dayIndex].toLowerCase();
+    const ranges = weekly[dayKey] || [];
 
-  return ranges.some(([start, end]) => {
-    const [sh, sm] = start.split(":").map(Number);
-    const [eh, em] = end.split(":").map(Number);
-    const startMin = sh * 60 + sm;
-    const endMin = eh * 60 + em;
-    return currentMinutes >= startMin && currentMinutes < endMin;
-  });
+    for (const [start, end] of ranges) {
+      const startMin = minutes(start);
+      if (offset > 0 || startMin > currentMinutes) {
+        return `${DAY_NAMES[dayIndex]} at ${formatTime(start)}`;
+      }
+    }
+  }
+
+  return null;
+}
+
+function isOpenNow(weekly) {
+  if (!weekly) return false;
+
+  const now = new Date();
+  const dayKey = DAY_NAMES[now.getDay()].toLowerCase();
+  const minsNow = now.getHours() * 60 + now.getMinutes();
+  const ranges = weekly[dayKey] || [];
+
+  return ranges.some(([s, e]) => minsNow >= minutes(s) && minsNow < minutes(e));
 }
 
 /* ===============================
@@ -69,10 +80,6 @@ function isOpenNow(client) {
 
 export default async function handler(req, res) {
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
     const { message, client_id } = req.body;
     if (!message || !client_id) {
       return res.status(400).json({ reply: "Invalid request." });
@@ -90,23 +97,31 @@ export default async function handler(req, res) {
       .single();
 
     if (!client) {
-      return res.json({ reply: "Company data is unavailable." });
+      return res.json({ reply: "Company information is unavailable." });
     }
 
-    const openNow = isOpenNow(client);
+    const openNow = isOpenNow(client.weekly_hours);
+    const hoursText = formatWeeklyHours(client.weekly_hours);
+    const nextOpen = getNextOpenTime(client.weekly_hours);
 
     const context = `
 Company: ${client.company_name}
 Description: ${client.company_info}
 Phone: ${client.phone_number || "Not available"}
 
-Status:
-The business is currently ${openNow ? "OPEN" : "CLOSED"}.
+Current status:
+${openNow ? "OPEN" : "CLOSED"}
+
+Regular hours:
+${hoursText}
+
+${!openNow && nextOpen ? `Next opening time: ${nextOpen}` : ""}
 
 Rules:
 - Appointments are handled by phone only.
-- Suggest calling ONLY if the business is open.
-- If closed, explain hours instead.
+- Suggest calling ONLY if currently open.
+- If closed, explain hours and next opening time.
+- If user reports a missed or failed call, respond calmly and suggest trying again during open hours.
 `;
 
     const completion = await openai.chat.completions.create({
@@ -116,18 +131,19 @@ Rules:
         {
           role: "system",
           content: `
-You are a professional assistant.
+You are a professional customer service assistant.
 
 Constraints:
 - Max 3 sentences
 - Max 60 words
 - No AI mentions
-- No speculation
+- Be calm and helpful
 
 Behavior:
 - If open, recommend calling when appropriate.
-- If closed, say they are closed and mention hours.
-          `
+- If closed, clearly state hours and next opening time.
+- If the user says their call didn’t go through, acknowledge it and suggest retrying during business hours.
+`
         },
         { role: "system", content: context },
         { role: "user", content: message }
@@ -135,9 +151,7 @@ Behavior:
     });
 
     return res.json({
-      reply:
-        completion.choices[0]?.message?.content ||
-        "Could you clarify what you’re looking for?"
+      reply: completion.choices[0]?.message?.content
     });
   } catch (err) {
     console.error(err);
