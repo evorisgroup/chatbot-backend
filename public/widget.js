@@ -1,355 +1,278 @@
-/* ===============================
-   ENSURE MOBILE VIEWPORT
-   =============================== */
-(function ensureViewport() {
-  try {
-    if (!document.querySelector('meta[name="viewport"]')) {
-      const meta = document.createElement("meta");
-      meta.name = "viewport";
-      meta.content = "width=device-width, initial-scale=1";
-      document.head.appendChild(meta);
-    }
-  } catch {}
-})();
+(function () {
+  if (!window.CLIENT_ID) {
+    console.error("CLIENT_ID not set");
+    return;
+  }
 
-(() => {
+  const API_BASE = "/api";
   const CLIENT_ID = window.CLIENT_ID;
-  if (!CLIENT_ID) return;
+
+  /* =========================================================
+     STATE
+  ========================================================= */
 
   let clientData = null;
   let chatOpen = false;
-  let typingInterval = null;
-  let introShown = false;
 
-  /* ===============================
+  /* =========================================================
      HELPERS
-     =============================== */
-  const DAY_KEYS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  ========================================================= */
 
-  function timestamp() {
-    return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  function isMobile() {
+    return window.matchMedia("(max-width: 768px)").matches;
   }
 
-  function formatTime(hm) {
-    const [h, m] = hm.split(":").map(Number);
-    const hour = h % 12 || 12;
-    const ampm = h >= 12 ? "PM" : "AM";
-    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
-  }
-
-  function getTodayHours() {
-    if (!clientData?.weekly_hours) return null;
-    const day = DAY_KEYS[new Date().getDay()];
-    const ranges = clientData.weekly_hours[day] || [];
-    if (!ranges.length) return null;
-    return ranges.map(r => `${formatTime(r[0])} – ${formatTime(r[1])}`).join(", ");
-  }
-
-  function isBusinessOpen() {
-    if (!clientData?.weekly_hours) return false;
-    const todayISO = new Date().toISOString().split("T")[0];
-    if (clientData.holiday_rules?.dates?.includes(todayISO)) return false;
-
-    const now = new Date();
-    const minsNow = now.getHours() * 60 + now.getMinutes();
-    const day = DAY_KEYS[now.getDay()];
-    const ranges = clientData.weekly_hours[day] || [];
-
-    return ranges.some(([s, e]) => {
-      const [sh, sm] = s.split(":").map(Number);
-      const [eh, em] = e.split(":").map(Number);
-      return minsNow >= sh * 60 + sm && minsNow < eh * 60 + em;
+  function el(tag, attrs = {}, children = []) {
+    const e = document.createElement(tag);
+    Object.entries(attrs).forEach(([k, v]) => {
+      if (k === "style") Object.assign(e.style, v);
+      else if (k.startsWith("on")) e.addEventListener(k.substring(2), v);
+      else e.setAttribute(k, v);
     });
+    children.forEach(c => e.appendChild(c));
+    return e;
   }
 
-  /* ===============================
-     FETCH CLIENT DATA
-     =============================== */
-  async function loadClientData() {
-    const res = await fetch(
-      `https://chatbot-backend-tawny-alpha.vercel.app/api/clientdata?client_id=${CLIENT_ID}`
-    );
-    clientData = await res.json();
-    applyBranding();
-    renderCallStatusBar();
+  function safeColor(color, fallback) {
+    return typeof color === "string" && color.startsWith("#")
+      ? color
+      : fallback;
   }
 
-  /* ===============================
-     CHAT BUBBLE
-     =============================== */
-  const bubble = document.createElement("div");
-  bubble.textContent = "💬";
-  Object.assign(bubble.style, {
-    position: "fixed",
-    bottom: "20px",
-    right: "20px",
-    width: "72px",
-    height: "72px",
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "28px",
-    cursor: "pointer",
-    boxShadow: "0 6px 18px rgba(0,0,0,.35)",
-    transition: "transform .2s",
-    zIndex: 999999
-  });
-  bubble.onmouseenter = () => bubble.style.transform = "scale(1.05)";
-  bubble.onmouseleave = () => bubble.style.transform = "scale(1)";
-  document.body.appendChild(bubble);
+  /* =========================================================
+     LOAD CLIENT DATA
+  ========================================================= */
 
-  /* ===============================
-     CHAT WINDOW
-     =============================== */
-  const chat = document.createElement("div");
-  Object.assign(chat.style, {
-    position: "fixed",
-    background: "#fff",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0 12px 32px rgba(0,0,0,.35)",
-    opacity: "0",
-    pointerEvents: "none",
-    transform: "translateY(40px)",
-    transition: "0.25s",
-    zIndex: 999998,
-    overflow: "hidden",
-    borderRadius: "16px"
-  });
+  fetch(`${API_BASE}/clientdata?client_id=${CLIENT_ID}`)
+    .then(r => r.json())
+    .then(data => {
+      clientData = data;
+      initWidget();
+    })
+    .catch(err => {
+      console.error("Failed to load client data", err);
+    });
 
-  function sizeChat() {
-    if (window.innerWidth <= 768) {
-      Object.assign(chat.style, { top: "12px", bottom: "12px", left: "8px", right: "8px" });
-    } else {
-      Object.assign(chat.style, { width: "360px", height: "500px", bottom: "110px", right: "20px" });
+  /* =========================================================
+     INIT
+  ========================================================= */
+
+  function initWidget() {
+    const brand = safeColor(clientData.primary_color, "#2563eb");
+
+    /* ---- Bubble button ---- */
+
+    const bubble = el("div", {
+      style: {
+        position: "fixed",
+        bottom: "20px",
+        right: "20px",
+        width: isMobile() ? "64px" : "56px",
+        height: isMobile() ? "64px" : "56px",
+        borderRadius: "50%",
+        background: brand,
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "26px",
+        cursor: "pointer",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+        zIndex: 9999
+      },
+      onclick: toggleChat
+    });
+
+    bubble.textContent = "💬";
+    document.body.appendChild(bubble);
+
+    /* ---- Chat window ---- */
+
+    const chat = el("div", {
+      id: "chat-widget",
+      style: {
+        position: "fixed",
+        bottom: isMobile() ? "0" : "90px",
+        right: isMobile() ? "0" : "20px",
+        width: isMobile() ? "100vw" : "360px",
+        height: isMobile() ? "100vh" : "520px",
+        background: "#fff",
+        borderRadius: isMobile() ? "0" : "16px",
+        boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+        display: "none",
+        flexDirection: "column",
+        overflow: "hidden",
+        zIndex: 9999
+      }
+    });
+
+    /* ---- Header ---- */
+
+    const header = el("div", {
+      style: {
+        background: brand,
+        color: "#fff",
+        padding: "14px 16px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }
+    });
+
+    const headerLeft = el("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: "10px"
+      }
+    });
+
+    if (clientData.logo_url) {
+      headerLeft.appendChild(
+        el("img", {
+          src: clientData.logo_url,
+          style: {
+            width: "32px",
+            height: "32px",
+            borderRadius: "6px",
+            objectFit: "contain",
+            background: "#fff",
+            padding: "2px"
+          }
+        })
+      );
     }
-  }
-  sizeChat();
-  window.addEventListener("resize", sizeChat);
-  document.body.appendChild(chat);
 
-  /* ===============================
-     HEADER
-     =============================== */
-  const header = document.createElement("div");
-  Object.assign(header.style, {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "16px",
-    color: "#fff",
-    fontWeight: "600"
-  });
-
-  const headerLeft = document.createElement("div");
-  headerLeft.style.display = "flex";
-  headerLeft.style.alignItems = "center";
-  headerLeft.style.gap = "10px";
-
-  const logo = document.createElement("img");
-  Object.assign(logo.style, { width: "28px", height: "28px", borderRadius: "6px", display: "none" });
-
-  const title = document.createElement("span");
-  headerLeft.append(logo, title);
-
-  const closeBtn = document.createElement("div");
-  closeBtn.textContent = "✕";
-  closeBtn.style.cursor = "pointer";
-  closeBtn.onclick = closeChat;
-
-  header.append(headerLeft, closeBtn);
-  chat.appendChild(header);
-
-  /* ===============================
-     CALL STATUS BAR
-     =============================== */
-  const callBar = document.createElement("a");
-  Object.assign(callBar.style, {
-    display: "none",
-    padding: "12px 16px",
-    fontSize: "14px",
-    fontWeight: "500",
-    textDecoration: "none",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomLeftRadius: "12px",
-    borderBottomRightRadius: "12px",
-    cursor: "pointer"
-  });
-
-  const callText = document.createElement("span");
-  const callAction = document.createElement("span");
-  callAction.textContent = "Call Now";
-  callBar.append(callText, callAction);
-  chat.appendChild(callBar);
-
-  function renderCallStatusBar() {
-    if (!clientData?.phone_number) return;
-    if (!isBusinessOpen()) return;
-    const hours = getTodayHours();
-    if (!hours) return;
-
-    callBar.href = `tel:${clientData.phone_number}`;
-    callText.textContent = `Open Today · ${hours}`;
-    callBar.style.display = "flex";
-    callBar.style.background = clientData.primary_color;
-    callBar.style.color = "#fff";
-  }
-
-  /* ===============================
-     MESSAGES
-     =============================== */
-  const messages = document.createElement("div");
-  Object.assign(messages.style, {
-    flex: "1",
-    padding: "16px",
-    overflowY: "auto",
-    background: "#fafafa",
-    display: "flex",
-    flexDirection: "column"
-  });
-  chat.appendChild(messages);
-
-  function addMessage(text, user) {
-    const msgWrap = document.createElement("div");
-    msgWrap.style.display = "flex";
-    msgWrap.style.flexDirection = "column";
-    msgWrap.style.alignItems = user ? "flex-end" : "flex-start";
-
-    const msg = document.createElement("div");
-    Object.assign(msg.style, {
-      margin: "6px 0",
-      padding: "12px 14px",
-      borderRadius: "10px",
-      maxWidth: "80%",
-      background: user ? "#e0e0e0" : "#fff",
-      color: "#000",
-      border: "1px solid #ddd"
-    });
-    msg.textContent = text;
-
-    const time = document.createElement("div");
-    time.textContent = timestamp();
-    time.style.fontSize = "11px";
-    time.style.opacity = "0.6";
-    time.style.marginTop = "2px";
-
-    msgWrap.append(msg, time);
-    messages.appendChild(msgWrap);
-    messages.scrollTop = messages.scrollHeight;
-  }
-
-  function showIntro() {
-    if (introShown || !clientData) return;
-    introShown = true;
-    addMessage(
-      `Hi! I’m the virtual assistant for ${clientData.company_name}. Ask me anything about our services, pricing, or availability.`,
-      false
+    headerLeft.appendChild(
+      el("div", {
+        style: { fontWeight: "600", fontSize: "15px" }
+      }, [document.createTextNode(clientData.company_name || "Chat")])
     );
-  }
 
-  /* ===============================
-     INPUT
-     =============================== */
-  const inputWrap = document.createElement("div");
-  Object.assign(inputWrap.style, {
-    padding: "16px",
-    borderTop: "1px solid #ddd",
-    boxSizing: "border-box"
-  });
+    const closeBtn = el("div", {
+      style: {
+        fontSize: "22px",
+        cursor: "pointer",
+        lineHeight: "1"
+      },
+      onclick: toggleChat
+    }, [document.createTextNode("×")]);
 
-  const textarea = document.createElement("textarea");
-  Object.assign(textarea.style, {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
-    fontSize: "16px",
-    resize: "none",
-    boxSizing: "border-box"
-  });
-  textarea.placeholder = "Type a message…";
+    header.appendChild(headerLeft);
+    header.appendChild(closeBtn);
 
-  const send = document.createElement("button");
-  send.textContent = "Send";
-  Object.assign(send.style, {
-    marginTop: "10px",
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "none",
-    color: "#fff",
-    cursor: "pointer"
-  });
+    /* ---- Messages ---- */
 
-  inputWrap.append(textarea, send);
-  chat.appendChild(inputWrap);
+    const messages = el("div", {
+      style: {
+        flex: "1",
+        padding: "12px",
+        overflowY: "auto",
+        background: "#f8fafc",
+        fontSize: "14px"
+      }
+    });
 
-  /* ===============================
-     SEND LOGIC
-     =============================== */
-  async function sendMessage() {
-    const text = textarea.value.trim();
-    if (!text) return;
-    textarea.value = "";
-    addMessage(text, true);
+    /* ---- Input ---- */
 
-    const res = await fetch(
-      "https://chatbot-backend-tawny-alpha.vercel.app/api/chat",
-      {
+    const inputWrap = el("div", {
+      style: {
+        padding: "10px",
+        borderTop: "1px solid #e5e7eb",
+        display: "flex",
+        gap: "8px"
+      }
+    });
+
+    const input = el("textarea", {
+      rows: 1,
+      placeholder: "Type a message…",
+      style: {
+        flex: "1",
+        resize: "none",
+        borderRadius: "12px",
+        border: "1px solid #d1d5db",
+        padding: "10px",
+        fontSize: "14px",
+        outline: "none"
+      }
+    });
+
+    const sendBtn = el("button", {
+      style: {
+        background: brand,
+        color: "#fff",
+        border: "none",
+        borderRadius: "12px",
+        padding: "0 16px",
+        cursor: "pointer",
+        fontSize: "14px"
+      },
+      onclick: sendMessage
+    }, [document.createTextNode("Send")]);
+
+    inputWrap.appendChild(input);
+    inputWrap.appendChild(sendBtn);
+
+    /* ---- Assemble ---- */
+
+    chat.appendChild(header);
+    chat.appendChild(messages);
+    chat.appendChild(inputWrap);
+    document.body.appendChild(chat);
+
+    /* ---- Default message (no tokens) ---- */
+
+    addMessage(
+      `Hi! I’m the virtual assistant for ${clientData.company_name}. How can I help you today?`,
+      "bot"
+    );
+
+    /* =========================================================
+       FUNCTIONS
+    ========================================================= */
+
+    function toggleChat() {
+      chatOpen = !chatOpen;
+      chat.style.display = chatOpen ? "flex" : "none";
+    }
+
+    function addMessage(text, who) {
+      const msg = el("div", {
+        style: {
+          marginBottom: "8px",
+          maxWidth: "85%",
+          padding: "10px 12px",
+          borderRadius: "12px",
+          background: who === "user" ? brand : "#e5e7eb",
+          color: who === "user" ? "#fff" : "#000",
+          alignSelf: who === "user" ? "flex-end" : "flex-start"
+        }
+      }, [document.createTextNode(text)]);
+
+      messages.appendChild(msg);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      addMessage(text, "user");
+      input.value = "";
+
+      fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, client_id: CLIENT_ID })
-      }
-    );
-    const data = await res.json();
-    addMessage(data.reply, false);
-  }
-
-  send.onclick = sendMessage;
-  textarea.addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  /* ===============================
-     BRANDING
-     =============================== */
-  function applyBranding() {
-    bubble.style.background = clientData.primary_color;
-    header.style.background = clientData.primary_color;
-    send.style.background = clientData.primary_color;
-    title.textContent = clientData.company_name;
-    if (clientData.logo_url) {
-      logo.src = clientData.logo_url;
-      logo.style.display = "block";
+        body: JSON.stringify({
+          client_id: CLIENT_ID,
+          message: text
+        })
+      })
+        .then(r => r.json())
+        .then(r => addMessage(r.reply, "bot"))
+        .catch(() => addMessage("Sorry, something went wrong.", "bot"));
     }
   }
-
-  /* ===============================
-     OPEN / CLOSE
-     =============================== */
-  function openChat() {
-    chatOpen = true;
-    chat.style.opacity = "1";
-    chat.style.pointerEvents = "auto";
-    chat.style.transform = "translateY(0)";
-    showIntro();
-  }
-
-  function closeChat() {
-    chatOpen = false;
-    chat.style.opacity = "0";
-    chat.style.pointerEvents = "none";
-    chat.style.transform = "translateY(40px)";
-  }
-
-  bubble.onclick = () => (chatOpen ? closeChat() : openChat());
-
-  loadClientData();
 })();
-
 
