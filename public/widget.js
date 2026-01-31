@@ -27,8 +27,9 @@
 
   // ------------------ Chat Bubble ------------------
   const bubble = document.createElement("div");
-  bubble.style.width = "60px";
-  bubble.style.height = "60px";
+  bubble.style.width = "72px";
+  bubble.style.height = "72px";
+  bubble.style.fontSize = "28px"; // makes emoji scale nicely
   bubble.style.borderRadius = "50%";
   bubble.style.display = "flex";
   bubble.style.alignItems = "center";
@@ -139,6 +140,7 @@
   textarea.placeholder = "Type a message...";
   textarea.rows = 2;
   textarea.style.width = "100%";
+  textarea.style.boxSizing = "border-box";
   textarea.style.padding = "10px";
   textarea.style.borderRadius = "8px";
   textarea.style.border = "1px solid #ccc";
