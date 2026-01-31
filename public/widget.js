@@ -26,12 +26,10 @@
     return window.innerWidth <= 768;
   }
 
-  function getDayName(idx) {
-    return [
-      "sunday","monday","tuesday","wednesday",
-      "thursday","friday","saturday"
-    ][idx];
-  }
+  const DAY_KEYS = [
+    "sunday","monday","tuesday","wednesday",
+    "thursday","friday","saturday"
+  ];
 
   function formatTime(hm) {
     const [h, m] = hm.split(":").map(Number);
@@ -42,7 +40,7 @@
 
   function getTodayHours() {
     if (!clientData?.weekly_hours) return null;
-    const day = getDayName(new Date().getDay());
+    const day = DAY_KEYS[new Date().getDay()];
     const ranges = clientData.weekly_hours[day] || [];
     if (!ranges.length) return null;
     return ranges.map(r => `${formatTime(r[0])} – ${formatTime(r[1])}`).join(", ");
@@ -56,7 +54,7 @@
 
     const now = new Date();
     const minsNow = now.getHours() * 60 + now.getMinutes();
-    const day = getDayName(now.getDay());
+    const day = DAY_KEYS[now.getDay()];
     const ranges = clientData.weekly_hours[day] || [];
 
     return ranges.some(([s, e]) => {
@@ -98,7 +96,6 @@
     boxShadow: "0 6px 18px rgba(0,0,0,.35)",
     zIndex: 999999
   });
-
   document.body.appendChild(bubble);
 
   /* ===============================
@@ -142,19 +139,47 @@
   document.body.appendChild(chat);
 
   /* ===============================
-     HEADER
+     HEADER (RESTORED)
      =============================== */
   const header = document.createElement("div");
   Object.assign(header.style, {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: "16px",
     color: "#fff",
-    fontWeight: "600",
-    borderTopLeftRadius: "16px",
-    borderTopRightRadius: "16px"
+    fontWeight: "600"
   });
 
-  const title = document.createElement("div");
-  header.appendChild(title);
+  const headerLeft = document.createElement("div");
+  Object.assign(headerLeft.style, {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px"
+  });
+
+  const logo = document.createElement("img");
+  Object.assign(logo.style, {
+    width: "28px",
+    height: "28px",
+    borderRadius: "6px",
+    display: "none"
+  });
+
+  const title = document.createElement("span");
+
+  headerLeft.append(logo, title);
+
+  const closeBtn = document.createElement("div");
+  closeBtn.textContent = "✕";
+  Object.assign(closeBtn.style, {
+    cursor: "pointer",
+    fontSize: "20px",
+    lineHeight: "1"
+  });
+  closeBtn.onclick = closeChat;
+
+  header.append(headerLeft, closeBtn);
   chat.appendChild(header);
 
   /* ===============================
@@ -254,18 +279,32 @@
     header.style.background = clientData.primary_color;
     send.style.background = clientData.primary_color;
     title.textContent = clientData.company_name;
+    if (clientData.logo_url) {
+      logo.src = clientData.logo_url;
+      logo.style.display = "block";
+    }
   }
 
   /* ===============================
      OPEN / CLOSE
      =============================== */
-  bubble.onclick = () => {
-    chatOpen = !chatOpen;
-    chat.style.opacity = chatOpen ? "1" : "0";
-    chat.style.pointerEvents = chatOpen ? "auto" : "none";
-    chat.style.transform = chatOpen ? "translateY(0)" : "translateY(40px)";
-  };
+  function openChat() {
+    chatOpen = true;
+    chat.style.opacity = "1";
+    chat.style.pointerEvents = "auto";
+    chat.style.transform = "translateY(0)";
+  }
+
+  function closeChat() {
+    chatOpen = false;
+    chat.style.opacity = "0";
+    chat.style.pointerEvents = "none";
+    chat.style.transform = "translateY(40px)";
+  }
+
+  bubble.onclick = () => (chatOpen ? closeChat() : openChat());
 
   loadClientData();
 })();
+
 
